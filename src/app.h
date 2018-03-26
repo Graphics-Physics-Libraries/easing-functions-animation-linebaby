@@ -5,11 +5,8 @@
 #include <GLFW/glfw3.h>
 /* -------------------------------------- */
 
-extern int32_t windowWidth, windowHeight;
-extern int32_t framebufferWidth, framebufferHeight;
-
 void lb_init();
-void lb_update(double t);
+void lb_update(double time, double dt);
 void lb_render();
 void lb_destroy();
 

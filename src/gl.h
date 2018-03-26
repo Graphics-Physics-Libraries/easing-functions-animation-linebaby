@@ -12,3 +12,5 @@ struct shaderProgram {
 
 GLuint loadShader(const GLenum type, const char* source, const int* sourceLength);
 struct shaderProgram* buildProgram(GLuint vertexShader, GLuint fragmentShader, const char** uniformNames, uint8_t numUniforms, struct shaderProgram* out);
+
+GLenum glCheckError();

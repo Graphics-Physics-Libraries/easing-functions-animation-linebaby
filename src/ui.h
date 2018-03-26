@@ -18,6 +18,8 @@ EXTERN_C void lb_ui_init(
 EXTERN_C void lb_ui_render(int32_t windowWidth, int32_t windowHeight, int32_t framebufferWidth, int32_t framebufferHeight, double dt);
 EXTERN_C void lb_ui_destroy(void(*glDestroy)());
 EXTERN_C bool lb_ui_isDrawingCursor();
+EXTERN_C bool lb_ui_capturedMouse();
+EXTERN_C bool lb_ui_capturedKeyboard();
 
 EXTERN_C void lb_ui_windowFocusCallback(bool focused);
 EXTERN_C void lb_ui_scrollCallback(double x, double y);

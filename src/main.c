@@ -6,8 +6,10 @@
 /* -------------------------------------- */
 
 #include "app.h"
+#include "util.h"
 
 static GLFWwindow* window = NULL;
+static double last_time = 0;
 
 static void handleGLFWError(int error, const char* description) {
 	fprintf(stderr, "GLFW Error %d: %s\n", error, description);
@@ -62,7 +64,10 @@ int main(int argc, char** argv) {
 		glfwGetWindowSize(window, &windowWidth, &windowHeight);
 		glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
 		
-		lb_update(1.0f/60.0f);
+		double cur_time = glfwGetTime();
+		lb_update(cur_time, cur_time - last_time);
+		last_time = cur_time;
+		
 		lb_render();
 		
 		glfwSwapBuffers(window);

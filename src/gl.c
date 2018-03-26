@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-static GLenum glCheckError() {
+GLenum glCheckError() {
 	GLenum errorCode;
 	while((errorCode = glGetError()) != GL_NO_ERROR) {
 		const char* error;

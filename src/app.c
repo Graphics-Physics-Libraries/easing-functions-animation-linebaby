@@ -3,23 +3,12 @@
 #include <stdint.h>
 #include <string.h>
 #include "gl.h"
+#include "strokes.h"
 #include "ui.h"
 
-int32_t windowWidth, windowHeight;
-int32_t framebufferWidth, framebufferHeight;
+#include "util.h"
 
-static float ortho_projection[4][4] = {
-	{ 2.0f, 0.0f, 0.0f, 0.0f },
-	{ 0.0f, -2.0f, 0.0f, 0.0f },
-	{ 0.0f, 0.0f, -1.0f, 0.0f },
-	{-1.0f, 1.0f, 0.0f, 1.0f },
-};
-
-static float* updateOrthoProjection() {
-	ortho_projection[0][0] = 2.0f / (float)windowWidth;
-	ortho_projection[1][1] = -2.0f / (float)windowHeight;
-	return ortho_projection;
-}
+static double curTime;
 
 // --- UI ---
 static struct {
@@ -35,7 +24,7 @@ static struct {
 
 static void ui_initGL(const unsigned char* fontPixels, const int fontWidth, const int fontHeight, unsigned int* fontTextureOut) {
 	
-	const char** uniformNames[2] = { "projection", "tex" };
+	const char* uniformNames[2] = { "projection", "tex" };
 	buildProgram(
 		loadShader(GL_VERTEX_SHADER, (char*)src_assets_shaders_ui_vert, (int*)&src_assets_shaders_ui_vert_len),
 		loadShader(GL_FRAGMENT_SHADER, (char*)src_assets_shaders_ui_frag, (int*)&src_assets_shaders_ui_frag_len),
@@ -107,24 +96,29 @@ static void ui_prepGLState(int windowWidth, int windowHeight, int fbWidth, int f
 	
 	
 	glUseProgram(ui_glState.shader.program);
-	glUniformMatrix4fv(ui_glState.shader.uniforms[0], 1, GL_FALSE, ortho_projection);
+	glUniformMatrix4fv(ui_glState.shader.uniforms[0], 1, GL_FALSE, (const GLfloat*)screen_ortho);
 	glUniform1i(ui_glState.shader.uniforms[1], 0);
 	glBindVertexArray(ui_glState.vaoHandle);
 	glBindSampler(0, 0); // Rely on combined texture/sampler state.
 }
 
 void lb_init() {
+	lb_strokes_init();
 	lb_ui_init(ui_initGL, ui_prepGLState, ui_uploadGLData, ui_drawGLElement);
 }
 
-void lb_update(double t) {
-	
+void lb_update(double time, double dt) {
+	curTime = time;
+	lb_strokes_updateTimeline((float)dt);
 }
 
 void lb_render() {
 	glDisable(GL_SCISSOR_TEST);
 	glClear(GL_COLOR_BUFFER_BIT);
-	updateOrthoProjection();
+	update_screen_ortho();
+	
+	lb_strokes_render();
+	
 	lb_ui_render(windowWidth, windowHeight, framebufferWidth, framebufferHeight, 1.0f/60.0f);
 }
 
@@ -136,15 +130,31 @@ void lb_destroy() {
 // --- INPUT ---
 void handleCallback_key(GLFWwindow* window, int key, int scancode, int action, int mods) {
 	lb_ui_keyCallback(key, scancode, action, mods);
+	if(lb_ui_capturedKeyboard()) return;
+
+	if(key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
+		lb_strokes_playing = !lb_strokes_playing;
+	}
 }
 void handleCallback_char(GLFWwindow* window, unsigned int codepoint) {
 	lb_ui_charCallback(codepoint);
 }
 void handleCallback_cursorPos(GLFWwindow* window, double x, double y) {
 	lb_ui_cursorPosCallback(x, y);
+	if(lb_ui_capturedMouse()) return;
+	
+	if(lb_strokes_isDrawing()) lb_strokes_addVertex((vec2){x, y}, (float)curTime);
 }
 void handleCallback_mouseButton(GLFWwindow* window, int button, int action, int mods) {
 	lb_ui_mouseButtonCallback(button, action, mods);
+	if(lb_ui_capturedMouse()) return;
+	
+	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+		double x, y;
+		glfwGetCursorPos(window, &x, &y);
+		lb_strokes_start((vec2){x, y}, (float)curTime);
+	}
+	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) lb_strokes_end();
 }
 void handleCallback_scroll(GLFWwindow* window, double x, double y) {
 	lb_ui_scrollCallback(x, y);
