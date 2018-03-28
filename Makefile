@@ -36,7 +36,7 @@ LINEBABY_SOURCES := $(shell find src -type f -name '*.c' -o -name '*.cpp')
 LINEBABY_OBJECTS := $(patsubst src/%.cpp,$(BUILD_DIR)/obj/%.o,$(patsubst src/%.c,$(BUILD_DIR)/obj/%.o,$(LINEBABY_SOURCES)))
 
 $(BUILD_DIR)/bin/linebaby: LDFLAGS += -L$(BUILD_DIR)/lib
-$(BUILD_DIR)/bin/linebaby: LDLIBS += -lstdc++ -limgui $(shell env PKG_CONFIG_PATH=./build/lib/pkgconfig pkg-config --static --libs-only-l glfw3 glew)
+$(BUILD_DIR)/bin/linebaby: LDLIBS += -lstdc++ -limgui -lpng $(shell env PKG_CONFIG_PATH=./build/lib/pkgconfig pkg-config --static --libs-only-l glfw3 glew)
 $(BUILD_DIR)/bin/linebaby: $(LINEBABY_OBJECTS) | $(BUILD_DIR)/vendor
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) $(LDLIBS) -o $@

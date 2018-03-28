@@ -1,6 +1,8 @@
 #pragma once
 
 #include <GL/glew.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #define LB_MAX_UNIFORMS 32
 
@@ -14,3 +16,5 @@ GLuint loadShader(const GLenum type, const char* source, const int* sourceLength
 struct shaderProgram* buildProgram(GLuint vertexShader, GLuint fragmentShader, const char** uniformNames, uint8_t numUniforms, struct shaderProgram* out);
 
 GLenum glCheckError();
+
+bool loadPNG(char* name, uint32_t* out_width, uint32_t* out_height, bool* out_has_alpha, GLubyte** out_data);

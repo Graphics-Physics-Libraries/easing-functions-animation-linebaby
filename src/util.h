@@ -14,6 +14,8 @@ typedef struct vec2 {
 	float x, y;
 } vec2;
 
+float vec2_dist(const vec2* a, const vec2* b);
+
 typedef union color32 {
 	struct {
 		uint8_t r;

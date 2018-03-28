@@ -11,7 +11,7 @@ enum lb_draw_mode {
 };
 
 enum lb_playback_mode {
-	PLAYBACK_REALTIME,
+	PLAYBACK_REALTIME = 0,
 	PLAYBACK_LINEAR
 };
 

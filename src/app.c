@@ -77,6 +77,7 @@ static void ui_uploadGLData(uint32_t bufSize, const void* bufData, uint32_t elem
 }
 
 static void ui_drawGLElement(uint32_t texID, int32_t scissorX, int32_t scissorY, int32_t scissorWidth, int32_t scissorHeight, int32_t numElements, uint32_t elementIdxTypeSize, const void* bufferOffset) {
+	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texID);
 	glScissor(scissorX, scissorY, scissorWidth, scissorHeight);
 	glDrawElements(GL_TRIANGLES, numElements, elementIdxTypeSize == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, bufferOffset);
