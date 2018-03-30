@@ -259,6 +259,19 @@ static void drawTimeline() {
 	}
 }
 
+static void drawTools() {
+	// ImGuiIO& io = ImGui::GetIO();
+	ImGuiStyle& style = ImGui::GetStyle();
+
+	ImGui::SetNextWindowSize(ImVec2(32, 64));
+	ImGui::SetNextWindowPos(style.WindowPadding);
+	ImGui::Begin("Tools", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+
+	// ImGui::
+
+	ImGui::End();
+}
+
 static void drawStrokeProperties() {
 	struct lb_stroke* selected = lb_strokes_getSelectedStroke();
 	if(!selected) return;
@@ -273,7 +286,7 @@ static void drawStrokeProperties() {
 	ImGui::Begin("Stroke Properties", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
 	ImGui::Text("Playback");
-	ImGui::Combo("##Playback", (int*)&selected->playback, "Realtime\0Linear\0\0");
+	// ImGui::Combo("##Playback", (int*)&selected->playback, "Realtime\0Linear\0\0");
 
 	ImGui::End();
 	ImGui::PopStyleColor();
@@ -307,9 +320,9 @@ EXTERN_C void lb_ui_render(int windowWidth, int windowHeight, int framebufferWid
 	// Start the frame. This call will update the io.WantCaptureMouse, io.WantCaptureKeyboard flag that you can use to dispatch inputs (or not) to your application.
 	ImGui::NewFrame();
 	
-	// drawMainMenuBar();
+	drawMainMenuBar();
 	if(guiState.showDemoPanel) ImGui::ShowDemoWindow(&guiState.showDemoPanel);
-	
+	drawTools();
 	drawTimeline();
 	drawStrokeProperties();
 

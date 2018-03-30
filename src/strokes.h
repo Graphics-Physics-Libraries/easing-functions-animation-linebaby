@@ -4,23 +4,21 @@
 #include <stdbool.h>
 #include "util.h"
 
+extern enum lb_input_mode {
+	INPUT_SELECT,
+	INPUT_DRAW
+} input_mode;
+
 enum lb_draw_mode {
 	DRAW_REALTIME,
 	DRAW_STAGGERED,
 	DRAW_CONCURRENT
 };
 
-enum lb_playback_mode {
-	PLAYBACK_REALTIME = 0,
-	PLAYBACK_LINEAR
-};
-
 struct lb_stroke {
-	vec2* vertices;
-	float* vertices_timing;
+	struct bezier_point* vertices;
 	float global_start_time;
 	float global_duration;
-	enum lb_playback_mode playback;
 	uint16_t vertices_len;
 };
 
@@ -37,7 +35,7 @@ struct lb_stroke* lb_strokes_getSelectedStroke();
 void lb_strokes_init();
 void lb_strokes_render();
 
-void lb_strokes_start(vec2 point, float time);
-void lb_strokes_addVertex(vec2 point, float time);
-void lb_strokes_end();
+void lb_strokes_handleMouseMove(vec2 point, float time);
+void lb_strokes_handleMouseDown(vec2 point, float time);
+void lb_strokes_handleMouseUp();
 bool lb_strokes_isDrawing();

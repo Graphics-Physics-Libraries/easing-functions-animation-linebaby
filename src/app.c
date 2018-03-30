@@ -144,7 +144,7 @@ void handleCallback_cursorPos(GLFWwindow* window, double x, double y) {
 	lb_ui_cursorPosCallback(x, y);
 	if(lb_ui_capturedMouse()) return;
 	
-	if(lb_strokes_isDrawing()) lb_strokes_addVertex((vec2){x, y}, (float)curTime);
+	lb_strokes_handleMouseMove((vec2){x, y}, (float)curTime);
 }
 void handleCallback_mouseButton(GLFWwindow* window, int button, int action, int mods) {
 	lb_ui_mouseButtonCallback(button, action, mods);
@@ -153,9 +153,10 @@ void handleCallback_mouseButton(GLFWwindow* window, int button, int action, int 
 	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
 		double x, y;
 		glfwGetCursorPos(window, &x, &y);
-		lb_strokes_start((vec2){x, y}, (float)curTime);
+		lb_strokes_handleMouseDown((vec2){x, y}, (float)curTime);
+	} else if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
+		lb_strokes_handleMouseUp();
 	}
-	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) lb_strokes_end();
 }
 void handleCallback_scroll(GLFWwindow* window, double x, double y) {
 	lb_ui_scrollCallback(x, y);

@@ -17,6 +17,5 @@ mat2 rotate2d(float _angle){
 
 void main() {
 	f_texCoord = texCoord;
-	
 	gl_Position = projection * vec4(((position*scale*rotate2d(rotation)) + translation).xy, 0, 1);
 }

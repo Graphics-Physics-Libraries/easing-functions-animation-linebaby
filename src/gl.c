@@ -105,7 +105,6 @@ struct shaderProgram* buildProgram(GLuint vertexShader, GLuint fragmentShader, c
 	for(uint8_t i = 0; i < numUniforms; i++) {
 		GLint uniformLoc = glGetUniformLocation(program, uniformNames[i]);
 		out->uniforms[i] = uniformLoc;
-		fprintf(stderr, "%s uniform set to loc %d at index %d\n", uniformNames[i], uniformLoc, i);
 	}
 	
 	return out;
