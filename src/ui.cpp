@@ -2,9 +2,11 @@
 
 #include <inttypes.h>
 #include <imgui/imgui.h>
-#include <stdio.h>
+
+#include <stdlib.h>
 
 EXTERN_C {
+	#include "gl.h"
 	#include "strokes.h"
 }
 
@@ -96,6 +98,8 @@ static struct {
 	bool showDemoPanel = false;
 } guiState;
 
+static GLuint ui_sprite_texID;
+
 EXTERN_C void lb_ui_init(
 	void(*glInit)(const unsigned char*, const int, const int, unsigned int*),
 	void(*glPrepFrameState)(int, int, int, int),
@@ -128,25 +132,29 @@ EXTERN_C void lb_ui_init(
 	io.RenderDrawListsFn = renderImGuiDrawLists;
 	
 	ImGui::StyleColorsDark();
+	
+	// Load custom spritesheet
+	uint32_t ui_sprite_width, ui_sprite_height;
+	bool ui_sprite_alpha;
+	GLubyte* ui_sprite_pix = loadPNG("src/assets/images/ui.png", &ui_sprite_width, &ui_sprite_height, &ui_sprite_alpha);
+	assert(ui_sprite_pix);
+	
+	
+	glGenTextures(1, &ui_sprite_texID);
+	glBindTexture(GL_TEXTURE_2D, ui_sprite_texID);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ui_sprite_width, ui_sprite_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, ui_sprite_pix);
+
+	free(ui_sprite_pix);
 }
 
 EXTERN_C void lb_ui_destroy(void(*glDestroy)()) {
 	ImGui::GetIO().Fonts->TexID = 0;
 	ImGui::Shutdown();
 	glDestroy();
-}
-
-static void drawMainMenuBar() {
-	if (ImGui::BeginMainMenuBar()) {
-		if (ImGui::BeginMenu("File")) {
-			ImGui::EndMenu();
-		}
-		if (ImGui::BeginMenu("Help")) {
-			if (ImGui::MenuItem("Show Demo Panel")) guiState.showDemoPanel = true;
-			ImGui::EndMenu();
-		}
-		ImGui::EndMainMenuBar();
-	}
 }
 
 static void drawTimeline() {
@@ -196,10 +204,9 @@ static void drawTimeline() {
 		lb_strokes_setTimelinePosition(ImGui::GetMousePos().x / io.DisplaySize.x * lb_strokes_timelineDuration);
 	}
 
-	struct lb_stroke* selected = lb_strokes_getSelectedStroke();
-	if(selected) {
-		float handle_l_x = selected->global_start_time / lb_strokes_timelineDuration * io.DisplaySize.x;
-		float handle_r_x = (selected->global_start_time + selected->global_duration) / lb_strokes_timelineDuration * io.DisplaySize.x;
+	if(lb_strokes_selected) {
+		float handle_l_x = lb_strokes_selected->global_start_time / lb_strokes_timelineDuration * io.DisplaySize.x;
+		float handle_r_x = (lb_strokes_selected->global_start_time + lb_strokes_selected->global_duration) / lb_strokes_timelineDuration * io.DisplaySize.x;
 		ImVec2 handle_l = ImVec2(handle_l_x, timeline_min.y - 3);
 		ImVec2 handle_r = ImVec2(handle_r_x, timeline_min.y - 3);
 
@@ -223,9 +230,9 @@ static void drawTimeline() {
 		}
 
 		if(dragging_handle_l && ImGui::IsMouseDragging()) {
-			selected->global_start_time = ImGui::GetMousePos().x / io.DisplaySize.x * lb_strokes_timelineDuration;
+			lb_strokes_selected->global_start_time = ImGui::GetMousePos().x / io.DisplaySize.x * lb_strokes_timelineDuration;
 		} else if(dragging_handle_r && ImGui::IsMouseDragging()) {
-			selected->global_duration = (ImGui::GetMousePos().x / io.DisplaySize.x * lb_strokes_timelineDuration) - selected->global_start_time;
+			lb_strokes_selected->global_duration = (ImGui::GetMousePos().x / io.DisplaySize.x * lb_strokes_timelineDuration) - lb_strokes_selected->global_start_time;
 		}
 
 		draw_list->AddTriangleFilled(
@@ -260,21 +267,54 @@ static void drawTimeline() {
 }
 
 static void drawTools() {
-	// ImGuiIO& io = ImGui::GetIO();
+	
+	static const ImVec2 cursor_uv0 = ImVec2(0.0f,1.0f);
+	static const ImVec2 cursor_uv1 = ImVec2(0.25f, 0.75f);
+	static const ImVec2 pencil_uv0 = ImVec2(0.25f, 1.0f);
+	static const ImVec2 pencil_uv1 = ImVec2(0.5f, 0.75f);
+	
+	//ImGuiIO& io = ImGui::GetIO();
 	ImGuiStyle& style = ImGui::GetStyle();
-
-	ImGui::SetNextWindowSize(ImVec2(32, 64));
+	
+	ImColor bg = style.Colors[ImGuiCol_WindowBg];
+	bg.Value.w = 0.2f;
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, bg.Value);
+	ImGui::SetNextWindowSize(ImVec2(32, 32));
 	ImGui::SetNextWindowPos(style.WindowPadding);
 	ImGui::Begin("Tools", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
-
-	// ImGui::
-
+	
+	ImVec2 const* uv0;
+	ImVec2 const* uv1;
+	switch(input_mode) {
+		case INPUT_DRAW:
+			uv0 = &pencil_uv0;
+			uv1 = &pencil_uv1;
+			break;
+		case INPUT_SELECT:
+			uv0 = &cursor_uv0;
+			uv1 = &cursor_uv1;
+			break;
+	}
+	
+	if(ImGui::IsMouseClicked(0) && ImGui::IsMouseHoveringWindow()) {
+		switch(input_mode) {
+			case INPUT_DRAW:
+				input_mode = INPUT_SELECT;
+				break;
+			case INPUT_SELECT:
+				input_mode = INPUT_DRAW;
+				break;
+		}
+	}
+	
+	ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), *uv0, *uv1, ImVec4(1,1,1,1));
+	
 	ImGui::End();
+	ImGui::PopStyleColor();
 }
 
 static void drawStrokeProperties() {
-	struct lb_stroke* selected = lb_strokes_getSelectedStroke();
-	if(!selected) return;
+	if(!lb_strokes_selected) return;
 
 	ImGuiIO& io = ImGui::GetIO();
 	ImGuiStyle& style = ImGui::GetStyle();
@@ -286,7 +326,7 @@ static void drawStrokeProperties() {
 	ImGui::Begin("Stroke Properties", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
 	ImGui::Text("Playback");
-	// ImGui::Combo("##Playback", (int*)&selected->playback, "Realtime\0Linear\0\0");
+	// ImGui::Combo("##Playback", (int*)&lb_strokes_selected->playback, "Realtime\0Linear\0\0");
 
 	ImGui::End();
 	ImGui::PopStyleColor();
@@ -320,7 +360,6 @@ EXTERN_C void lb_ui_render(int windowWidth, int windowHeight, int framebufferWid
 	// Start the frame. This call will update the io.WantCaptureMouse, io.WantCaptureKeyboard flag that you can use to dispatch inputs (or not) to your application.
 	ImGui::NewFrame();
 	
-	drawMainMenuBar();
 	if(guiState.showDemoPanel) ImGui::ShowDemoWindow(&guiState.showDemoPanel);
 	drawTools();
 	drawTimeline();

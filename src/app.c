@@ -115,7 +115,9 @@ void lb_update(double time, double dt) {
 
 void lb_render() {
 	glDisable(GL_SCISSOR_TEST);
+	glClearColor(lb_clear_color.r / 255.f, lb_clear_color.g / 255.f, lb_clear_color.b / 255.f, lb_clear_color.a / 255.f);
 	glClear(GL_COLOR_BUFFER_BIT);
+	
 	update_screen_ortho();
 	
 	lb_strokes_render();
@@ -133,13 +135,15 @@ void handleCallback_key(GLFWwindow* window, int key, int scancode, int action, i
 	lb_ui_keyCallback(key, scancode, action, mods);
 	if(lb_ui_capturedKeyboard()) return;
 
-	if(key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
-		lb_strokes_playing = !lb_strokes_playing;
-	}
+	if(action == GLFW_PRESS) lb_strokes_handleKeyDown(key, scancode, mods);
+	else if(action == GLFW_RELEASE) lb_strokes_handleKeyUp(key, scancode, mods);
+	else if(action == GLFW_REPEAT) lb_strokes_handleKeyRepeat(key, scancode, mods);
 }
+
 void handleCallback_char(GLFWwindow* window, unsigned int codepoint) {
 	lb_ui_charCallback(codepoint);
 }
+
 void handleCallback_cursorPos(GLFWwindow* window, double x, double y) {
 	lb_ui_cursorPosCallback(x, y);
 	if(lb_ui_capturedMouse()) return;

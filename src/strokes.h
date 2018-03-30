@@ -22,19 +22,23 @@ struct lb_stroke {
 	uint16_t vertices_len;
 };
 
+extern color32 lb_clear_color;
 extern enum lb_draw_mode lb_strokes_drawMode;
 extern bool lb_strokes_playing;
 extern float lb_strokes_timelineDuration;
 extern float lb_strokes_timelinePosition;
 extern bool lb_strokes_draggingPlayhead;
+extern struct lb_stroke* lb_strokes_selected;
 
 float lb_strokes_setTimelinePosition(float pos);
 void lb_strokes_updateTimeline(float dt);
-struct lb_stroke* lb_strokes_getSelectedStroke();
 
 void lb_strokes_init();
 void lb_strokes_render();
 
+void lb_strokes_handleKeyDown(int key, int scancode, int mods);
+void lb_strokes_handleKeyUp(int key, int scancode, int mods);
+void lb_strokes_handleKeyRepeat(int key, int scancode, int mods);
 void lb_strokes_handleMouseMove(vec2 point, float time);
 void lb_strokes_handleMouseDown(vec2 point, float time);
 void lb_strokes_handleMouseUp();

@@ -110,7 +110,7 @@ struct shaderProgram* buildProgram(GLuint vertexShader, GLuint fragmentShader, c
 	return out;
 }
 
-bool loadPNG(char* name, uint32_t* out_width, uint32_t* out_height, bool* out_has_alpha, GLubyte** out_data) {
+GLubyte* loadPNG(const char* name, uint32_t* out_width, uint32_t* out_height, bool* out_has_alpha) {
 	
 	png_structp png_ptr;
     png_infop info_ptr;
@@ -119,7 +119,7 @@ bool loadPNG(char* name, uint32_t* out_width, uint32_t* out_height, bool* out_ha
     FILE *fp;
  
     if ((fp = fopen(name, "rb")) == NULL)
-        return false;
+        return NULL;
 
     /* Create and initialize the png_struct
      * with the desired error handler
@@ -135,7 +135,7 @@ bool loadPNG(char* name, uint32_t* out_width, uint32_t* out_height, bool* out_ha
     png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
     if (png_ptr == NULL) {
         fclose(fp);
-        return false;
+        return NULL;
     }
  
     /* Allocate/initialize the memory
@@ -144,7 +144,7 @@ bool loadPNG(char* name, uint32_t* out_width, uint32_t* out_height, bool* out_ha
     if (info_ptr == NULL) {
         fclose(fp);
         png_destroy_read_struct(&png_ptr, NULL, NULL);
-        return false;
+        return NULL;
     }
  
     /* Set error handling if you are
@@ -163,7 +163,7 @@ bool loadPNG(char* name, uint32_t* out_width, uint32_t* out_height, bool* out_ha
         fclose(fp);
         /* If we get here, we had a
          * problem reading the file */
-        return false;
+        return NULL;
     }
  
     /* Set up the output control if
@@ -204,7 +204,7 @@ bool loadPNG(char* name, uint32_t* out_width, uint32_t* out_height, bool* out_ha
     
  	uint32_t height = *out_height;
     unsigned int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
-    *out_data = (GLubyte*) malloc(row_bytes * height);
+    GLubyte* out_data = malloc(row_bytes * height);
  
     png_bytepp row_pointers = png_get_rows(png_ptr, info_ptr);
  
@@ -212,7 +212,7 @@ bool loadPNG(char* name, uint32_t* out_width, uint32_t* out_height, bool* out_ha
         // note that png is ordered top to
         // bottom, but OpenGL expect it bottom to top
         // so the order or swapped
-        memcpy(*out_data+(row_bytes * (height-1-i)), row_pointers[i], row_bytes);
+        memcpy(out_data+(row_bytes * (height-1-i)), row_pointers[i], row_bytes);
     }
  
     /* Clean up after the read,
@@ -222,6 +222,5 @@ bool loadPNG(char* name, uint32_t* out_width, uint32_t* out_height, bool* out_ha
     /* Close the file */
     fclose(fp);
  
-    /* That's it */
-    return true;
+ 	return out_data;
 }

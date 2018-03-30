@@ -19,6 +19,8 @@ float vec2_len(const vec2 a);
 vec2 vec2_add(const vec2 a, const vec2 b);
 vec2 vec2_sub(const vec2 a, const vec2 b);
 
+float map(float value, float istart, float istop, float ostart, float ostop);
+
 typedef union color32 {
 	struct {
 		uint8_t r;
@@ -41,3 +43,4 @@ uint16_t hyperbola_min_segments(const float length);
 #define BEZIER_DISTANCE_CACHE_SIZE 512
 float bezier_distance_update_cache(const struct bezier_point* a, const struct bezier_point* b);
 float bezier_distance_closest_t(float dist_t);
+vec2 bezier_closest_point(const struct bezier_point* a, const struct bezier_point* b, uint16_t resolution, uint16_t iterations, vec2 point);

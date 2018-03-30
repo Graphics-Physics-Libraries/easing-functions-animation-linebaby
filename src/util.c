@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stddef.h>
 #include <assert.h>
+#include <float.h>
 
 int32_t windowWidth, windowHeight;
 int32_t framebufferWidth, framebufferHeight;
@@ -107,4 +108,43 @@ float bezier_distance_closest_t(float dist_t) {
 	float t2 = ((float)i+1) / (float)BEZIER_DISTANCE_CACHE_SIZE;
 	float prev_dist = dist_accum - bezier_distance_cache[i];
 	return t1 + (t2-t1)*((dist_length - prev_dist) / (dist_accum - prev_dist));
+}
+
+// Finds the closest point on the curve to the supplied point
+vec2 bezier_closest_point(const struct bezier_point* a, const struct bezier_point* b, uint16_t resolution, uint16_t iterations, vec2 point) {
+	
+	uint16_t closest_idx;
+	vec2 points_on_curve[resolution];
+	float distances[resolution];
+	float start_t = 0;
+	float end_t = 1;
+	
+	for(uint16_t i = 0; i < iterations; i++) {
+		
+		for(uint16_t r = 0; r < resolution; r++) {
+			points_on_curve[r] = bezier_cubic(a, b, map(r, 0, resolution, start_t, end_t));
+			distances[r] = vec2_dist(points_on_curve[r], point);
+		}
+		
+		float smallest = FLT_MAX;
+		for(uint16_t r = 0; r < resolution; r++) {
+			if(smallest > distances[r]) {
+				smallest = distances[r];
+				closest_idx = r;
+			}
+		}
+		
+		float midpoint_t = map(closest_idx, 0, resolution, start_t, end_t);
+		float spread = end_t - start_t;
+		start_t = midpoint_t - spread/3.0f;
+		if(start_t < 0) start_t = 0;
+		end_t = midpoint_t + spread/3.0f;
+		if(end_t > 1) end_t = 1;
+	}
+	
+	return points_on_curve[closest_idx];
+}
+
+float map(float value, float istart, float istop, float ostart, float ostop) {
+	return ostart + (ostop - ostart) * ((value - istart) / (istop - istart));
 }
