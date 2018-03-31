@@ -95,7 +95,7 @@ static void renderImGuiDrawLists(ImDrawData* data) {
 }
 
 static struct {
-	bool showDemoPanel = false;
+	bool showDemoPanel = true;
 } guiState;
 
 static GLuint ui_sprite_texID;
@@ -325,9 +325,9 @@ static void drawStrokeProperties() {
 	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 200 - 5, 5));
 	ImGui::Begin("Stroke Properties", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
-	ImGui::Text("Playback");
-	// ImGui::Combo("##Playback", (int*)&lb_strokes_selected->playback, "Realtime\0Linear\0\0");
-
+	ImGui::Text("Thickness");
+	ImGui::SliderFloat("##Thickness", &lb_strokes_selected->scale, 2.0f, 50.0f, "pixels = %.2f");
+	
 	ImGui::End();
 	ImGui::PopStyleColor();
 }

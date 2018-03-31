@@ -76,7 +76,7 @@ enum brush_shader_uniform {
 	BRUSH_UNIFORM_TRANSLATION,
 	BRUSH_UNIFORM_SCALE,
 	BRUSH_UNIFORM_ROTATION,
-	// BRUSH_UNIFORM_MASK_TEXTURE,
+	BRUSH_UNIFORM_MASK_TEXTURE,
 	BRUSH_UNIFORM_BRUSH_TEXTURE
 };
 
@@ -239,6 +239,7 @@ void lb_strokes_init() {
 		.vertices = &data.vertices[0],
 		.global_start_time = 0,
 		.global_duration = 5.0f,
+		.scale = 50.0f,
 		.vertices_len = 2
 	};
 	
@@ -254,10 +255,7 @@ void lb_strokes_render() {
 	glUseProgram(brush_shader.program);
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-	float scale = 4.0f;
-
 	glUniformMatrix4fv(brush_shader.uniforms[BRUSH_UNIFORM_PROJECTION], 1, GL_FALSE, (const GLfloat*) screen_ortho);
-	glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_SCALE], scale, scale); // TODO: Configurable
 	for(size_t i = 0; i < data.strokes_len; i++) {
 		if(!data.strokes[i].vertices_len) continue;
 		if(data.strokes[i].global_start_time > lb_strokes_timelinePosition) continue;
@@ -272,6 +270,8 @@ void lb_strokes_render() {
 		float total_length_drawn = total_length*percent_drawn;
 		//TODO: Optimize out the double calculation of length, cache the total length if possible
 		
+		glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_SCALE], data.strokes[i].scale, data.strokes[i].scale); // TODO: Configurable
+
 		// Brush
 		float length_accum = 0.0f;
 		for(size_t v = 0; v < data.strokes[i].vertices_len-1; v++) {
@@ -283,7 +283,7 @@ void lb_strokes_render() {
 			if(percent_segment_drawn <= 0) break;
 			if(percent_segment_drawn > 1) percent_segment_drawn = 1;
 			
-			unsigned int total_equidistant_points_len = (unsigned int)ceil(segment_length / scale);
+			unsigned int total_equidistant_points_len = (unsigned int)ceil(segment_length / (data.strokes[i].scale / 2.0f));
 			unsigned int drawn_points_len = (unsigned int)ceil(percent_segment_drawn * total_equidistant_points_len);
 			length_accum += segment_length;
 
@@ -294,20 +294,17 @@ void lb_strokes_render() {
 				glUniform1f(brush_shader.uniforms[BRUSH_UNIFORM_ROTATION], (float)p); //rotation
 				glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_TRANSLATION], equidistant_points[p].x, equidistant_points[p].y);
 				
-				// glUniform1i(brush_shader.uniforms[BRUSH_UNIFORM_MASK_TEXTURE], 0);
-				// glActiveTexture(GL_TEXTURE0);
-				// glBindTexture(GL_TEXTURE_2D, mask_texture);
+				glUniform1i(brush_shader.uniforms[BRUSH_UNIFORM_MASK_TEXTURE], 0);
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, mask_texture);
 				
 				glUniform1i(brush_shader.uniforms[BRUSH_UNIFORM_BRUSH_TEXTURE], 1);
-				glActiveTexture(GL_TEXTURE0);
+				glActiveTexture(GL_TEXTURE0+1);
 				glBindTexture(GL_TEXTURE_2D, brush_texture);
 
 				glBindVertexArray(plane_vao);
 				glDrawArrays(GL_TRIANGLES, 0, 6);
 			}
-			
-			// glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2)*10, &equidistant_points);
-			// glDrawArrays(GL_POINTS, 0, 10);
 			
 			if(percent_segment_drawn < 1.0f) break;
 		}

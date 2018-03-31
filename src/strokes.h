@@ -19,6 +19,7 @@ struct lb_stroke {
 	struct bezier_point* vertices;
 	float global_start_time;
 	float global_duration;
+	float scale;
 	uint16_t vertices_len;
 };
 
