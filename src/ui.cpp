@@ -396,7 +396,7 @@ static void drawStrokeProperties() {
 	ImGui::Begin("Stroke Properties", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
 	ImGui::Text("Thickness");
-	ImGui::SliderFloat("##Thickness", &lb_strokes_selected->scale, 2.0f, 50.0f, "pixels = %.2f");
+	ImGui::SliderFloat("##Thickness", &lb_strokes_selected->scale, 1.0f, 15.0f, "pixels = %.2f");
 	
 	ImGui::Separator();
 	

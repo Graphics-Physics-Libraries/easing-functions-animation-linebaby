@@ -9,12 +9,6 @@ extern enum lb_input_mode {
 	INPUT_DRAW
 } input_mode;
 
-enum lb_draw_mode {
-	DRAW_REALTIME,
-	DRAW_STAGGERED,
-	DRAW_CONCURRENT
-};
-
 enum lb_animate_method {
 	ANIMATE_NONE = 0,
 	ANIMATE_DRAW,
@@ -25,6 +19,11 @@ struct lb_stroke_transition {
 	enum lb_animate_method method;
 	float duration;
 	bool draw_reverse;
+};
+
+struct bezier_point {
+	vec2 anchor;
+	vec2 handles[2];
 };
 
 struct lb_stroke {
@@ -40,7 +39,6 @@ struct lb_stroke {
 };
 
 extern color32 lb_clear_color;
-extern enum lb_draw_mode lb_strokes_drawMode;
 extern bool lb_strokes_playing;
 extern float lb_strokes_timelineDuration;
 extern float lb_strokes_timelinePosition;
@@ -59,4 +57,3 @@ void lb_strokes_handleKeyRepeat(int key, int scancode, int mods);
 void lb_strokes_handleMouseMove(vec2 point, float time);
 void lb_strokes_handleMouseDown(vec2 point, float time);
 void lb_strokes_handleMouseUp();
-bool lb_strokes_isDrawing();

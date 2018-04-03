@@ -25,13 +25,11 @@ static struct {
 
 // Timeline
 color32 lb_clear_color = (color32){.r = 255, .g = 255, .b = 255, .a = 255};
-enum lb_draw_mode lb_strokes_drawMode = DRAW_REALTIME;
 bool lb_strokes_playing = false;
 float lb_strokes_timelineDuration = 10.0f;
 float lb_strokes_timelinePosition = 5.0f;
 bool lb_strokes_draggingPlayhead = false;
 enum lb_input_mode input_mode = INPUT_DRAW;
-static bool drawing = false;
 
 float lb_strokes_setTimelinePosition(float pos) {
 	pos = (pos < 0.0f ? 0.0f : pos);
@@ -43,7 +41,7 @@ void lb_strokes_updateTimeline(float dt) {
 	if(lb_strokes_timelinePosition > lb_strokes_timelineDuration) lb_strokes_timelinePosition = lb_strokes_timelineDuration;
 	if(lb_strokes_timelinePosition < 0) lb_strokes_timelinePosition = 0;
 	
-	if((!drawing && !lb_strokes_playing) || lb_strokes_draggingPlayhead) return;
+	if(!lb_strokes_playing || lb_strokes_draggingPlayhead) return;
 	lb_strokes_timelinePosition += dt;
 
 	if(lb_strokes_timelinePosition > lb_strokes_timelineDuration) {
@@ -239,7 +237,7 @@ void lb_strokes_init() {
 		.vertices = &data.vertices[0],
 		.global_start_time = 0,
 		.full_duration = 5.0f,
-		.scale = 20.0f,
+		.scale = 10.0f,
 		.vertices_len = 2,
 		.enter = (struct lb_stroke_transition){
 			.method = ANIMATE_DRAW,
@@ -457,6 +455,14 @@ void lb_strokes_render() {
 		
 		// -- Control points
 		{
+			// Indicate the last drawn point
+			if(lb_strokes_selected == &data.strokes[data.strokes_len-1]) {
+				glUniform3f(line_shader.uniforms[LINE_UNIFORM_COLOR], 1.0f, 0.0f, 1.0f);
+				glUniform1f(line_shader.uniforms[LINE_UNIFORM_POINT_SIZE], 9.0f);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2), &lb_strokes_selected->vertices[lb_strokes_selected->vertices_len-1].anchor);
+				glDrawArrays(GL_POINTS, 0, 1);
+			}
+			
 			glUniform3f(line_shader.uniforms[LINE_UNIFORM_COLOR], 1.0f, 0.0f, 0.0f);
 			glUniform1f(line_shader.uniforms[LINE_UNIFORM_POINT_SIZE], 5.0f);
 
@@ -472,10 +478,6 @@ void lb_strokes_render() {
 
 		glCheckError();
 	}
-}
-
-bool lb_strokes_isDrawing() {
-	return drawing;
 }
 
 static enum drag_mode {
@@ -569,14 +571,28 @@ void lb_strokes_handleMouseDown(vec2 point, float time) {
 		}
 
 		case INPUT_DRAW: {
-			if(!lb_strokes_selected) {
+			if(!lb_strokes_selected || lb_strokes_selected != &data.strokes[data.strokes_len-1]) {
 				lb_strokes_selected = &data.strokes[data.strokes_len];
 				data.strokes_len++;
 
-				lb_strokes_selected->vertices = &data.vertices[data.vertices_len];
-				lb_strokes_selected->vertices_len = 0;
-				lb_strokes_selected->global_start_time = lb_strokes_timelinePosition;
-				lb_strokes_selected->full_duration = 1.0f;
+				*lb_strokes_selected = (struct lb_stroke){
+					.vertices = &data.vertices[data.vertices_len],
+					.vertices_len = 0,
+					.global_start_time = lb_strokes_timelinePosition,
+					.full_duration = 1.0f,
+					.scale = 10.0f,
+					.enter = (struct lb_stroke_transition){
+						.method = ANIMATE_DRAW,
+						.duration = 0.35f,
+						.draw_reverse = false,
+					},
+					.exit = (struct lb_stroke_transition){
+						.method = ANIMATE_DRAW,
+						.duration = 0.35f,
+						.draw_reverse = true,
+					},
+				};
+				
 			}
 			
 			assert(lb_strokes_selected->vertices_len < MAX_STROKE_VERTICES);
@@ -652,6 +668,17 @@ void lb_strokes_handleKeyDown(int key, int scancode, int mods) {
 			break;
 		case GLFW_KEY_SPACE:
 			lb_strokes_playing = !lb_strokes_playing;
+			break;
+		case GLFW_KEY_TAB:
+			if(input_mode == INPUT_DRAW) input_mode = INPUT_SELECT;
+			else if(input_mode == INPUT_SELECT) input_mode = INPUT_DRAW;
+			break;
+		case GLFW_KEY_ESCAPE:
+			lb_strokes_selected = NULL;
+			break;
+		case GLFW_KEY_BACKSPACE:
+		case GLFW_KEY_DELETE:
+			// TODO: Cleanup
 			break;
 	}
 }

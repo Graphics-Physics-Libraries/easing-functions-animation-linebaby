@@ -99,9 +99,7 @@ float bezier_distance_closest_t(float dist_t) {
 			break;
 		}
 	}
-
-	assert(i < BEZIER_DISTANCE_CACHE_SIZE); // should have found the segment before reaching the end
-
+	
 	// requested distance is within distance [i] (between (t) points [i] and [i+1])
 	// simple linear interpolation between t1 and t2 mapped to distance
 	float t1 = (float)i / (float)BEZIER_DISTANCE_CACHE_SIZE;
