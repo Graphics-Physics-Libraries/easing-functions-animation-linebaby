@@ -74,6 +74,7 @@ enum brush_shader_uniform {
 	BRUSH_UNIFORM_TRANSLATION,
 	BRUSH_UNIFORM_SCALE,
 	BRUSH_UNIFORM_ROTATION,
+	BRUSH_UNIFORM_ALPHA,
 	BRUSH_UNIFORM_MASK_TEXTURE,
 	BRUSH_UNIFORM_BRUSH_TEXTURE
 };
@@ -185,6 +186,7 @@ void lb_strokes_init() {
 			"translation",
 			"scale",
 			"rotation",
+			"brushAlpha",
 			"maskTex",
 			"brushTex"
 		};
@@ -237,7 +239,7 @@ void lb_strokes_init() {
 		.vertices = &data.vertices[0],
 		.global_start_time = 0,
 		.full_duration = 5.0f,
-		.scale = 50.0f,
+		.scale = 20.0f,
 		.vertices_len = 2,
 		.enter = (struct lb_stroke_transition){
 			.method = ANIMATE_DRAW,
@@ -301,6 +303,7 @@ void lb_strokes_render() {
 		bool reverse = false;
 		
 		float percent_drawn;
+		enum lb_animate_method method;
 		switch(state) {
 			case NONE:
 				continue;
@@ -314,6 +317,7 @@ void lb_strokes_render() {
 					data.strokes[i].global_start_time + data.strokes[i].enter.duration,
 					0, 1);
 				reverse = data.strokes[i].enter.draw_reverse;
+				method = data.strokes[i].enter.method;
 				break;
 			case EXITING: {
 				float begin = data.strokes[i].global_start_time +
@@ -325,40 +329,74 @@ void lb_strokes_render() {
 					begin, end,
 					1, 0);
 				reverse = data.strokes[i].exit.draw_reverse;
+				method = data.strokes[i].exit.method;
 				break;
 			}
 		}
 		
+		size_t v;
+		int dir = reverse ? -1 : 1;
+		
 		float total_length = 0.0f;
-		for(size_t v = 0; v < data.strokes[i].vertices_len-1; v++) {
-			total_length += bezier_distance_update_cache(&data.strokes[i].vertices[v], &data.strokes[i].vertices[v+1]);
+		for(size_t vi = 0; vi < data.strokes[i].vertices_len-1; vi++) {
+			v = reverse ? (data.strokes[i].vertices_len-1) - vi : vi;
+			
+			struct bezier_point* a = &data.strokes[i].vertices[v];
+			struct bezier_point* b = &data.strokes[i].vertices[v+dir];
+			vec2 h1, h2;
+			if(reverse) {
+				h1 = a->handles[0];
+				h2 = b->handles[1];
+			} else {
+				h1 = a->handles[1];
+				h2 = b->handles[0];
+			}
+			
+			total_length += bezier_distance_update_cache(a->anchor, h1, h2, b->anchor);
 		}
+		
+		if(method == ANIMATE_FADE) {
+			glUniform1f(brush_shader.uniforms[BRUSH_UNIFORM_ALPHA], percent_drawn);
+			percent_drawn = 1;
+		} else {
+			glUniform1f(brush_shader.uniforms[BRUSH_UNIFORM_ALPHA], 1);
+		}
+		
 		float total_length_drawn = total_length*percent_drawn;
 		//TODO: Optimize out the double calculation of length, cache the total length if possible
 		
 		glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_SCALE], data.strokes[i].scale, data.strokes[i].scale);
-
+				
 		// Brush
 		float length_accum = 0.0f;
 		for(size_t vi = 0; vi < data.strokes[i].vertices_len-1; vi++) {
-			size_t v = reverse ? (data.strokes[i].vertices_len-1) - vi : vi;
-			int dir = reverse ? -1 : 1;
+			v = reverse ? (data.strokes[i].vertices_len-1) - vi : vi;
+			
 			struct bezier_point* a = &data.strokes[i].vertices[v];
 			struct bezier_point* b = &data.strokes[i].vertices[v+dir];
-			float segment_length = bezier_distance_update_cache(a,b);
+			vec2 h1, h2;
+			if(reverse) {
+				h1 = a->handles[0];
+				h2 = b->handles[1];
+			} else {
+				h1 = a->handles[1];
+				h2 = b->handles[0];
+			}
 			
+			
+			float segment_length = bezier_distance_update_cache(a->anchor, h1, h2, b->anchor);
 			float percent_segment_drawn = (total_length_drawn - length_accum) / segment_length;
 			if(percent_segment_drawn <= 0) break;
 			if(percent_segment_drawn > 1) percent_segment_drawn = 1;
-			
+
 			unsigned int total_equidistant_points_len = (unsigned int)ceil(segment_length / (data.strokes[i].scale / 2.0f));
-			unsigned int drawn_points_len = (unsigned int)ceil(percent_segment_drawn * total_equidistant_points_len);
+			unsigned int drawn_points_len = (unsigned int)ceil(percent_segment_drawn * total_equidistant_points_len) + 1;
 			length_accum += segment_length;
 
 			//TODO: Instanced drawing
 			for(size_t p = 0; p < drawn_points_len; p++) {
-				vec2 loc = bezier_cubic(a,b,bezier_distance_closest_t(p/(float)total_equidistant_points_len));
-				glUniform1f(brush_shader.uniforms[BRUSH_UNIFORM_ROTATION], (float)p);
+				vec2 loc = bezier_cubic(a->anchor, h1, h2, b->anchor, bezier_distance_closest_t(p/(float)total_equidistant_points_len));
+				glUniform1f(brush_shader.uniforms[BRUSH_UNIFORM_ROTATION], reverse ? (float)total_equidistant_points_len - (float)p : (float)p);
 				glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_TRANSLATION], loc.x, loc.y);
 				
 				glUniform1i(brush_shader.uniforms[BRUSH_UNIFORM_MASK_TEXTURE], 0);
@@ -394,12 +432,12 @@ void lb_strokes_render() {
 		for(size_t v = 0; v < lb_strokes_selected->vertices_len-1; v++) {
 			struct bezier_point* a = &lb_strokes_selected->vertices[v];
 			struct bezier_point* b = &lb_strokes_selected->vertices[v+1];
-			float len = bezier_estimate_length(a, b);
+			float len = bezier_estimate_length(a->anchor, a->handles[1], b->handles[0], b->anchor);
 			uint16_t segments = hyperbola_min_segments(len);
 			float step = 1.0f / (float)segments;
 			size_t lines = 0;
 			for(float t = 0; t <= 1; t += step) {
-				vec2 loc = bezier_cubic(a, b, t);
+				vec2 loc = bezier_cubic(a->anchor, a->handles[1], b->handles[0], b->anchor, t);
 				glBufferSubData(GL_ARRAY_BUFFER, lines*sizeof(vec2), sizeof(vec2), &loc);
 				lines++;
 			}
@@ -463,7 +501,7 @@ void lb_strokes_handleMouseDown(vec2 point, float time) {
 					for(size_t v = 0; v < data.strokes[i].vertices_len-1; v++) {
 						struct bezier_point* a = &data.strokes[i].vertices[v];
 						struct bezier_point* b = &data.strokes[i].vertices[v+1];
-						vec2 closest = bezier_closest_point(a, b, 20, 3, point);
+						vec2 closest = bezier_closest_point(a->anchor, a->handles[1], b->handles[0], b->anchor, 20, 3, point);
 						if(vec2_dist(point, closest) <= select_tolerance_dist) {
 							lb_strokes_selected = &data.strokes[i];
 							goto exit;
@@ -501,7 +539,7 @@ void lb_strokes_handleMouseDown(vec2 point, float time) {
 			for(size_t v = 0; v < lb_strokes_selected->vertices_len-1; v++) {
 				struct bezier_point* a = &lb_strokes_selected->vertices[v];
 				struct bezier_point* b = &lb_strokes_selected->vertices[v+1];
-				vec2 closest = bezier_closest_point(a, b, 20, 3, point);
+				vec2 closest = bezier_closest_point(a->anchor, a->handles[1], b->handles[0], b->anchor, 20, 3, point);
 				if(vec2_dist(point, closest) <= select_tolerance_dist) {
 					drag_start = point;
 					drag_mode = DRAG_STROKE;

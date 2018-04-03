@@ -36,11 +36,11 @@ struct bezier_point {
 	vec2 handles[2];
 };
 
-vec2 bezier_cubic(const struct bezier_point* a, const struct bezier_point* b, const float t);
-float bezier_estimate_length(const struct bezier_point* a, const struct bezier_point* b);
+vec2 bezier_cubic(const vec2 a, const vec2 h1, const vec2 h2, const vec2 b, const float t);
+float bezier_estimate_length(const vec2 a, const vec2 h1, const vec2 h2, const vec2 b);
 uint16_t hyperbola_min_segments(const float length);
 
 #define BEZIER_DISTANCE_CACHE_SIZE 512
-float bezier_distance_update_cache(const struct bezier_point* a, const struct bezier_point* b);
+float bezier_distance_update_cache(const vec2 a, const vec2 h1, const vec2 h2, const vec2 b);
 float bezier_distance_closest_t(float dist_t);
-vec2 bezier_closest_point(const struct bezier_point* a, const struct bezier_point* b, uint16_t resolution, uint16_t iterations, vec2 point);
+vec2 bezier_closest_point(const vec2 a, const vec2 h1, const vec2 h2, const vec2 b, uint16_t resolution, uint16_t iterations, vec2 point);
