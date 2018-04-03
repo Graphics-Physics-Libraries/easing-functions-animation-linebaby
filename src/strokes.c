@@ -30,10 +30,8 @@ bool lb_strokes_playing = false;
 float lb_strokes_timelineDuration = 10.0f;
 float lb_strokes_timelinePosition = 5.0f;
 bool lb_strokes_draggingPlayhead = false;
-static float draw_start_time;
 enum lb_input_mode input_mode = INPUT_DRAW;
 static bool drawing = false;
-static uint16_t drawing_stroke_idx;
 
 float lb_strokes_setTimelinePosition(float pos) {
 	pos = (pos < 0.0f ? 0.0f : pos);
@@ -238,17 +236,57 @@ void lb_strokes_init() {
 	data.strokes[0] = (struct lb_stroke){
 		.vertices = &data.vertices[0],
 		.global_start_time = 0,
-		.global_duration = 5.0f,
+		.full_duration = 5.0f,
 		.scale = 50.0f,
-		.vertices_len = 2
+		.vertices_len = 2,
+		.enter = (struct lb_stroke_transition){
+			.method = ANIMATE_DRAW,
+			.duration = 1.0f,
+			.draw_reverse = false,
+		},
+		.exit = (struct lb_stroke_transition){
+			.method = ANIMATE_DRAW,
+			.duration = 1.0f,
+			.draw_reverse = false,
+		},
 	};
 	
 	lb_strokes_selected = &data.strokes[0];
 }
 
-void lb_strokes_render() {
+enum draw_state {
+	NONE = 0, 
+	ENTERING,
+	FULL,
+	EXITING
+};
 
+//TODO: Easy unit test
+static enum draw_state lb_stroke_getDrawStateForTime(const struct lb_stroke* stroke, const float time) {
+	assert(stroke);
+	if(time < stroke->global_start_time) return NONE;
+	float acc = stroke->global_start_time;
+	if(stroke->enter.method != ANIMATE_NONE) {
+		acc += stroke->enter.duration;
+		if(time < acc) return ENTERING;
+	}
+	
+	acc += stroke->full_duration;
+	if(time < acc) return FULL;
+	
+	if(stroke->exit.method != ANIMATE_NONE) {
+		acc += stroke->exit.duration;
+		if(time < acc) return EXITING;
+	}
+	return NONE;
+}
+
+void lb_strokes_render() {
+	
+	glEnable(GL_BLEND);
+	glBlendEquation(GL_FUNC_ADD);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	
 	glDisable(GL_DEPTH_TEST);
 
 	// Draw brushes
@@ -257,11 +295,39 @@ void lb_strokes_render() {
 
 	glUniformMatrix4fv(brush_shader.uniforms[BRUSH_UNIFORM_PROJECTION], 1, GL_FALSE, (const GLfloat*) screen_ortho);
 	for(size_t i = 0; i < data.strokes_len; i++) {
-		if(!data.strokes[i].vertices_len) continue;
-		if(data.strokes[i].global_start_time > lb_strokes_timelinePosition) continue;
-		if(data.strokes[i].global_start_time + data.strokes[i].global_duration < lb_strokes_timelinePosition) continue;
+		if(data.strokes[i].vertices_len < 2) continue;
 		
-		float percent_drawn = (lb_strokes_timelinePosition - data.strokes[i].global_start_time) / data.strokes[i].global_duration;
+		enum draw_state state = lb_stroke_getDrawStateForTime(&data.strokes[i], lb_strokes_timelinePosition);
+		bool reverse = false;
+		
+		float percent_drawn;
+		switch(state) {
+			case NONE:
+				continue;
+			case FULL:
+				percent_drawn = 1;
+				break;
+			case ENTERING:
+				percent_drawn = map(
+					lb_strokes_timelinePosition,
+					data.strokes[i].global_start_time,
+					data.strokes[i].global_start_time + data.strokes[i].enter.duration,
+					0, 1);
+				reverse = data.strokes[i].enter.draw_reverse;
+				break;
+			case EXITING: {
+				float begin = data.strokes[i].global_start_time +
+					(data.strokes[i].enter.method == ANIMATE_NONE ? 0 : data.strokes[i].enter.duration) +
+					data.strokes[i].full_duration;
+				float end = begin + data.strokes[i].exit.duration;
+				percent_drawn = map(
+					lb_strokes_timelinePosition,
+					begin, end,
+					1, 0);
+				reverse = data.strokes[i].exit.draw_reverse;
+				break;
+			}
+		}
 		
 		float total_length = 0.0f;
 		for(size_t v = 0; v < data.strokes[i].vertices_len-1; v++) {
@@ -270,13 +336,15 @@ void lb_strokes_render() {
 		float total_length_drawn = total_length*percent_drawn;
 		//TODO: Optimize out the double calculation of length, cache the total length if possible
 		
-		glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_SCALE], data.strokes[i].scale, data.strokes[i].scale); // TODO: Configurable
+		glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_SCALE], data.strokes[i].scale, data.strokes[i].scale);
 
 		// Brush
 		float length_accum = 0.0f;
-		for(size_t v = 0; v < data.strokes[i].vertices_len-1; v++) {
+		for(size_t vi = 0; vi < data.strokes[i].vertices_len-1; vi++) {
+			size_t v = reverse ? (data.strokes[i].vertices_len-1) - vi : vi;
+			int dir = reverse ? -1 : 1;
 			struct bezier_point* a = &data.strokes[i].vertices[v];
-			struct bezier_point* b = &data.strokes[i].vertices[v+1];
+			struct bezier_point* b = &data.strokes[i].vertices[v+dir];
 			float segment_length = bezier_distance_update_cache(a,b);
 			
 			float percent_segment_drawn = (total_length_drawn - length_accum) / segment_length;
@@ -288,11 +356,10 @@ void lb_strokes_render() {
 			length_accum += segment_length;
 
 			//TODO: Instanced drawing
-			vec2 equidistant_points[drawn_points_len];
 			for(size_t p = 0; p < drawn_points_len; p++) {
-				equidistant_points[p] = bezier_cubic(a,b,bezier_distance_closest_t(p/(float)total_equidistant_points_len));
-				glUniform1f(brush_shader.uniforms[BRUSH_UNIFORM_ROTATION], (float)p); //rotation
-				glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_TRANSLATION], equidistant_points[p].x, equidistant_points[p].y);
+				vec2 loc = bezier_cubic(a,b,bezier_distance_closest_t(p/(float)total_equidistant_points_len));
+				glUniform1f(brush_shader.uniforms[BRUSH_UNIFORM_ROTATION], (float)p);
+				glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_TRANSLATION], loc.x, loc.y);
 				
 				glUniform1i(brush_shader.uniforms[BRUSH_UNIFORM_MASK_TEXTURE], 0);
 				glActiveTexture(GL_TEXTURE0);
@@ -471,7 +538,7 @@ void lb_strokes_handleMouseDown(vec2 point, float time) {
 				lb_strokes_selected->vertices = &data.vertices[data.vertices_len];
 				lb_strokes_selected->vertices_len = 0;
 				lb_strokes_selected->global_start_time = lb_strokes_timelinePosition;
-				lb_strokes_selected->global_duration = 1.0f;
+				lb_strokes_selected->full_duration = 1.0f;
 			}
 			
 			assert(lb_strokes_selected->vertices_len < MAX_STROKE_VERTICES);

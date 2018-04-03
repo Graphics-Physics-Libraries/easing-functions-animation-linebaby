@@ -15,11 +15,27 @@ enum lb_draw_mode {
 	DRAW_CONCURRENT
 };
 
+enum lb_animate_method {
+	ANIMATE_NONE = 0,
+	ANIMATE_DRAW,
+	ANIMATE_FADE
+};
+
+struct lb_stroke_transition {
+	enum lb_animate_method method;
+	float duration;
+	bool draw_reverse;
+};
+
 struct lb_stroke {
 	struct bezier_point* vertices;
 	float global_start_time;
-	float global_duration;
+	float full_duration;
 	float scale;
+	
+	struct lb_stroke_transition enter;
+	struct lb_stroke_transition exit;
+	
 	uint16_t vertices_len;
 };
 

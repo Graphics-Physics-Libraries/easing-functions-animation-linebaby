@@ -2,6 +2,7 @@
 
 #include <inttypes.h>
 #include <imgui/imgui.h>
+#include <stdio.h>
 
 #include <stdlib.h>
 
@@ -205,46 +206,115 @@ static void drawTimeline() {
 	}
 
 	if(lb_strokes_selected) {
-		float handle_l_x = lb_strokes_selected->global_start_time / lb_strokes_timelineDuration * io.DisplaySize.x;
-		float handle_r_x = (lb_strokes_selected->global_start_time + lb_strokes_selected->global_duration) / lb_strokes_timelineDuration * io.DisplaySize.x;
-		ImVec2 handle_l = ImVec2(handle_l_x, timeline_min.y - 3);
-		ImVec2 handle_r = ImVec2(handle_r_x, timeline_min.y - 3);
-
-		draw_list->AddLine(ImVec2(handle_l.x, handle_l.y - 4), ImVec2(handle_r.x, handle_r.y - 4), ImGui::GetColorU32(ImGuiCol_TextDisabled));
-
-		bool mouse_hovering_handle_l = ImGui::IsMouseHoveringRect(ImVec2(handle_l.x - 6, handle_l.y - 6), ImVec2(handle_l.x + 6, handle_l.y));
-		bool mouse_hovering_handle_r = ImGui::IsMouseHoveringRect(ImVec2(handle_r.x - 6, handle_r.y - 6), ImVec2(handle_r.x + 6, handle_r.y));
-
-		static bool dragging_handle_l = false;
-		static bool dragging_handle_r = false;
-
-		if(mouse_hovering_handle_l && ImGui::IsMouseClicked(0)) {
-			dragging_handle_l = true;
+		const float handle_left_time = lb_strokes_selected->global_start_time;
+		const float handle_enter_time = handle_left_time + (lb_strokes_selected->enter.method == ANIMATE_NONE ? 0 : lb_strokes_selected->enter.duration);
+		const float handle_exit_time = handle_enter_time + lb_strokes_selected->full_duration;
+		const float handle_right_time = handle_exit_time + (lb_strokes_selected->exit.method == ANIMATE_NONE ? 0 : lb_strokes_selected->exit.duration);
+		
+		ImVec2 handle_left = ImVec2(handle_left_time / lb_strokes_timelineDuration * io.DisplaySize.x, timeline_min.y - 3);
+		ImVec2 handle_enter = ImVec2(handle_enter_time / lb_strokes_timelineDuration * io.DisplaySize.x, timeline_min.y - 3);
+		ImVec2 handle_exit = ImVec2(handle_exit_time / lb_strokes_timelineDuration * io.DisplaySize.x, timeline_min.y - 3);
+		ImVec2 handle_right = ImVec2(handle_right_time / lb_strokes_timelineDuration * io.DisplaySize.x, timeline_min.y - 3);
+		
+		bool mouse_hovering_handle_left = ImGui::IsMouseHoveringRect(ImVec2(handle_left.x - 6, handle_left.y - 6), ImVec2(handle_left.x + 6, handle_left.y));
+		bool mouse_hovering_handle_right = ImGui::IsMouseHoveringRect(ImVec2(handle_right.x - 6, handle_right.y - 6), ImVec2(handle_right.x + 6, handle_right.y));
+		
+		bool mouse_hovering_handle_enter;
+		if(lb_strokes_selected->enter.method != ANIMATE_NONE) mouse_hovering_handle_enter = ImGui::IsMouseHoveringRect(ImVec2(handle_enter.x - 6, handle_enter.y - 15), ImVec2(handle_enter.x, handle_enter.y - 9));
+		bool mouse_hovering_handle_exit;
+		if(lb_strokes_selected->exit.method != ANIMATE_NONE) mouse_hovering_handle_exit = ImGui::IsMouseHoveringRect(ImVec2(handle_exit.x, handle_exit.y - 15), ImVec2(handle_exit.x + 6, handle_exit.y - 9));
+		
+		static bool dragging_handle_left = false;
+		static bool dragging_handle_enter = false;
+		static bool dragging_handle_exit = false;
+		static bool dragging_handle_right = false;
+		
+		if(mouse_hovering_handle_left && ImGui::IsMouseClicked(0)) {
+			dragging_handle_left = true;
 		} else if(ImGui::IsMouseReleased(0)) {
-			dragging_handle_l = false;
+			dragging_handle_left = false;
 		}
-		if(mouse_hovering_handle_r && ImGui::IsMouseClicked(0)) {
-			dragging_handle_r = true;
+		if(mouse_hovering_handle_enter && ImGui::IsMouseClicked(0)) {
+			dragging_handle_enter = true;
 		} else if(ImGui::IsMouseReleased(0)) {
-			dragging_handle_r = false;
+			dragging_handle_enter = false;
+			if(lb_strokes_selected->enter.duration == 0) lb_strokes_selected->enter.method = ANIMATE_NONE;
+		}
+		if(mouse_hovering_handle_exit && ImGui::IsMouseClicked(0)) {
+			dragging_handle_exit = true;
+		} else if(ImGui::IsMouseReleased(0)) {
+			dragging_handle_exit = false;
+			if(lb_strokes_selected->exit.duration == 0) lb_strokes_selected->exit.method = ANIMATE_NONE;
+		}
+		if(mouse_hovering_handle_right && ImGui::IsMouseClicked(0)) {
+			dragging_handle_right = true;
+		} else if(ImGui::IsMouseReleased(0)) {
+			dragging_handle_right = false;
 		}
 
-		if(dragging_handle_l && ImGui::IsMouseDragging()) {
+		if(dragging_handle_left && ImGui::IsMouseDragging()) {
 			lb_strokes_selected->global_start_time = ImGui::GetMousePos().x / io.DisplaySize.x * lb_strokes_timelineDuration;
-		} else if(dragging_handle_r && ImGui::IsMouseDragging()) {
-			lb_strokes_selected->global_duration = (ImGui::GetMousePos().x / io.DisplaySize.x * lb_strokes_timelineDuration) - lb_strokes_selected->global_start_time;
+		
+		} else if(dragging_handle_right && ImGui::IsMouseDragging()) {
+			lb_strokes_selected->full_duration = (ImGui::GetMousePos().x / io.DisplaySize.x * lb_strokes_timelineDuration)
+			- lb_strokes_selected->global_start_time
+			- lb_strokes_selected->enter.duration
+			- lb_strokes_selected->exit.duration;
+			if(lb_strokes_selected->full_duration < 0) {
+				lb_strokes_selected->full_duration = 0;
+			}
+		} else if(dragging_handle_enter && ImGui::IsMouseDragging()) {
+			float original_full = lb_strokes_selected->full_duration;
+			float original_enter = lb_strokes_selected->enter.duration;
+			lb_strokes_selected->enter.duration = (ImGui::GetMousePos().x / io.DisplaySize.x * lb_strokes_timelineDuration) - lb_strokes_selected->global_start_time;
+			lb_strokes_selected->full_duration -= lb_strokes_selected->enter.duration - original_enter;
+			if(lb_strokes_selected->enter.duration < 0) {
+				lb_strokes_selected->enter.duration = 0;
+				lb_strokes_selected->full_duration = original_full;
+			} else if(lb_strokes_selected->full_duration < 0) {
+				lb_strokes_selected->full_duration = 0;
+				lb_strokes_selected->enter.duration = original_enter;
+			}
+			
+		} else if(dragging_handle_exit && ImGui::IsMouseDragging()) {
+			float original_full = lb_strokes_selected->full_duration;
+			float original_exit = lb_strokes_selected->exit.duration;
+			
+			lb_strokes_selected->full_duration = (ImGui::GetMousePos().x / io.DisplaySize.x * lb_strokes_timelineDuration) - lb_strokes_selected->global_start_time - lb_strokes_selected->enter.duration;
+			lb_strokes_selected->exit.duration -= lb_strokes_selected->full_duration - original_full;
+			if(lb_strokes_selected->exit.duration < 0) {
+				lb_strokes_selected->exit.duration = 0;
+				lb_strokes_selected->full_duration = original_full;
+			} else if(lb_strokes_selected->full_duration < 0) {
+				lb_strokes_selected->full_duration = 0;
+				lb_strokes_selected->exit.duration = original_exit;
+			}
 		}
-
+		
+		
+		draw_list->AddLine(ImVec2(handle_left.x, handle_left.y - 4), ImVec2(handle_right.x, handle_right.y - 4), ImGui::GetColorU32(ImGuiCol_TextDisabled));
+		
+		if(lb_strokes_selected->enter.method != ANIMATE_NONE) {
+			draw_list->AddLine(ImVec2(handle_left.x, handle_left.y), ImVec2(handle_enter.x, handle_enter.y - 4), ImGui::GetColorU32(ImGuiCol_PlotLinesHovered));
+			draw_list->AddLine(ImVec2(handle_enter.x, handle_enter.y - 3), ImVec2(handle_enter.x, handle_enter.y - 15), ImGui::GetColorU32(mouse_hovering_handle_enter || dragging_handle_enter ? ImGuiCol_PlotHistogram : ImGuiCol_PlotHistogramHovered));
+			draw_list->AddRectFilled(ImVec2(handle_enter.x - 6, handle_enter.y - 15), ImVec2(handle_enter.x, handle_enter.y - 9), ImGui::GetColorU32(mouse_hovering_handle_enter || dragging_handle_enter ? ImGuiCol_PlotHistogram : ImGuiCol_PlotHistogramHovered));
+		}
+		if(lb_strokes_selected->exit.method != ANIMATE_NONE) {
+			draw_list->AddLine(ImVec2(handle_exit.x, handle_exit.y - 4), ImVec2(handle_right.x, handle_right.y), ImGui::GetColorU32(ImGuiCol_PlotLinesHovered));
+			draw_list->AddLine(ImVec2(handle_exit.x, handle_exit.y - 3), ImVec2(handle_exit.x, handle_exit.y - 15), ImGui::GetColorU32(mouse_hovering_handle_enter || dragging_handle_enter ? ImGuiCol_PlotHistogram : ImGuiCol_PlotHistogramHovered));
+			draw_list->AddRectFilled(ImVec2(handle_exit.x, handle_exit.y - 15), ImVec2(handle_exit.x + 6, handle_exit.y - 9), ImGui::GetColorU32(mouse_hovering_handle_exit || dragging_handle_exit ? ImGuiCol_PlotHistogram : ImGuiCol_PlotHistogramHovered));
+		}
+		
 		draw_list->AddTriangleFilled(
-			handle_l,
-			ImVec2(handle_l.x - 6, handle_l.y - 6),
-			ImVec2(handle_l.x + 6, handle_l.y - 6),
-			ImGui::GetColorU32(mouse_hovering_handle_l || dragging_handle_l ? ImGuiCol_ButtonHovered : ImGuiCol_ButtonActive));
+			handle_left,
+			ImVec2(handle_left.x - 6, handle_left.y - 6),
+			ImVec2(handle_left.x + 6, handle_left.y - 6),
+			ImGui::GetColorU32(mouse_hovering_handle_left || dragging_handle_left ? ImGuiCol_ButtonHovered : ImGuiCol_ButtonActive));
 		draw_list->AddTriangleFilled(
-			handle_r,
-			ImVec2(handle_r.x - 6, handle_r.y - 6),
-			ImVec2(handle_r.x + 6, handle_r.y - 6),
-			ImGui::GetColorU32(mouse_hovering_handle_r || dragging_handle_r ? ImGuiCol_ButtonHovered : ImGuiCol_ButtonActive));
+			handle_right,
+			ImVec2(handle_right.x - 6, handle_right.y - 6),
+			ImVec2(handle_right.x + 6, handle_right.y - 6),
+			ImGui::GetColorU32(mouse_hovering_handle_right || dragging_handle_right ? ImGuiCol_ButtonHovered : ImGuiCol_ButtonActive));
 	}
 
 	ImGui::End();
@@ -328,6 +398,30 @@ static void drawStrokeProperties() {
 	ImGui::Text("Thickness");
 	ImGui::SliderFloat("##Thickness", &lb_strokes_selected->scale, 2.0f, 50.0f, "pixels = %.2f");
 	
+	ImGui::Separator();
+	
+	static const char* animation_mode_combo = "None\0Draw\0Fade\0";
+	
+	ImGui::Text("Entrance Animation");
+	ImGui::Combo("##enter_method", (int*)&lb_strokes_selected->enter.method, animation_mode_combo);
+	switch(lb_strokes_selected->enter.method) {
+		case ANIMATE_DRAW:
+			ImGui::Checkbox("Reverse", &lb_strokes_selected->enter.draw_reverse);
+		default:
+			break;
+	}
+	
+	ImGui::Separator();
+	
+	ImGui::Text("Exit Animation");
+	ImGui::Combo("##exit_method", (int*)&lb_strokes_selected->exit.method, animation_mode_combo);
+	switch(lb_strokes_selected->exit.method) {
+		case ANIMATE_DRAW:
+			ImGui::Checkbox("Reverse", &lb_strokes_selected->exit.draw_reverse);
+		default:
+			break;
+	}
+	
 	ImGui::End();
 	ImGui::PopStyleColor();
 }
@@ -360,7 +454,7 @@ EXTERN_C void lb_ui_render(int windowWidth, int windowHeight, int framebufferWid
 	// Start the frame. This call will update the io.WantCaptureMouse, io.WantCaptureKeyboard flag that you can use to dispatch inputs (or not) to your application.
 	ImGui::NewFrame();
 	
-	if(guiState.showDemoPanel) ImGui::ShowDemoWindow(&guiState.showDemoPanel);
+	// if(guiState.showDemoPanel) ImGui::ShowDemoWindow(&guiState.showDemoPanel);
 	drawTools();
 	drawTimeline();
 	drawStrokeProperties();
