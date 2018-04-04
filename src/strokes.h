@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "util.h"
+#include "easing.h"
 
 extern enum lb_input_mode {
 	INPUT_SELECT,
@@ -16,7 +17,8 @@ enum lb_animate_method {
 };
 
 struct lb_stroke_transition {
-	enum lb_animate_method method;
+	enum EasingMethod easing_method;
+	enum lb_animate_method animate_method;
 	float duration;
 	bool draw_reverse;
 };

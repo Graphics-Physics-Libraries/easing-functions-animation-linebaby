@@ -31,11 +31,6 @@ typedef union color32 {
 	uint32_t u;
 } color32;
 
-struct bezier_point {
-	vec2 anchor;
-	vec2 handles[2];
-};
-
 vec2 bezier_cubic(const vec2 a, const vec2 h1, const vec2 h2, const vec2 b, const float t);
 float bezier_estimate_length(const vec2 a, const vec2 h1, const vec2 h2, const vec2 b);
 uint16_t hyperbola_min_segments(const float length);
@@ -44,3 +39,4 @@ uint16_t hyperbola_min_segments(const float length);
 float bezier_distance_update_cache(const vec2 a, const vec2 h1, const vec2 h2, const vec2 b);
 float bezier_distance_closest_t(float dist_t);
 vec2 bezier_closest_point(const vec2 a, const vec2 h1, const vec2 h2, const vec2 b, uint16_t resolution, uint16_t iterations, vec2 point);
+

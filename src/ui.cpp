@@ -9,6 +9,7 @@
 EXTERN_C {
 	#include "gl.h"
 	#include "strokes.h"
+	#include "easing.h"
 }
 
 static bool windowFocused;
@@ -207,9 +208,9 @@ static void drawTimeline() {
 
 	if(lb_strokes_selected) {
 		const float handle_left_time = lb_strokes_selected->global_start_time;
-		const float handle_enter_time = handle_left_time + (lb_strokes_selected->enter.method == ANIMATE_NONE ? 0 : lb_strokes_selected->enter.duration);
+		const float handle_enter_time = handle_left_time + (lb_strokes_selected->enter.animate_method == ANIMATE_NONE ? 0 : lb_strokes_selected->enter.duration);
 		const float handle_exit_time = handle_enter_time + lb_strokes_selected->full_duration;
-		const float handle_right_time = handle_exit_time + (lb_strokes_selected->exit.method == ANIMATE_NONE ? 0 : lb_strokes_selected->exit.duration);
+		const float handle_right_time = handle_exit_time + (lb_strokes_selected->exit.animate_method == ANIMATE_NONE ? 0 : lb_strokes_selected->exit.duration);
 		
 		ImVec2 handle_left = ImVec2(handle_left_time / lb_strokes_timelineDuration * io.DisplaySize.x, timeline_min.y - 3);
 		ImVec2 handle_enter = ImVec2(handle_enter_time / lb_strokes_timelineDuration * io.DisplaySize.x, timeline_min.y - 3);
@@ -220,9 +221,9 @@ static void drawTimeline() {
 		bool mouse_hovering_handle_right = ImGui::IsMouseHoveringRect(ImVec2(handle_right.x - 6, handle_right.y - 6), ImVec2(handle_right.x + 6, handle_right.y));
 		
 		bool mouse_hovering_handle_enter;
-		if(lb_strokes_selected->enter.method != ANIMATE_NONE) mouse_hovering_handle_enter = ImGui::IsMouseHoveringRect(ImVec2(handle_enter.x - 6, handle_enter.y - 15), ImVec2(handle_enter.x, handle_enter.y - 9));
+		if(lb_strokes_selected->enter.animate_method != ANIMATE_NONE) mouse_hovering_handle_enter = ImGui::IsMouseHoveringRect(ImVec2(handle_enter.x - 6, handle_enter.y - 15), ImVec2(handle_enter.x, handle_enter.y - 9));
 		bool mouse_hovering_handle_exit;
-		if(lb_strokes_selected->exit.method != ANIMATE_NONE) mouse_hovering_handle_exit = ImGui::IsMouseHoveringRect(ImVec2(handle_exit.x, handle_exit.y - 15), ImVec2(handle_exit.x + 6, handle_exit.y - 9));
+		if(lb_strokes_selected->exit.animate_method != ANIMATE_NONE) mouse_hovering_handle_exit = ImGui::IsMouseHoveringRect(ImVec2(handle_exit.x, handle_exit.y - 15), ImVec2(handle_exit.x + 6, handle_exit.y - 9));
 		
 		static bool dragging_handle_left = false;
 		static bool dragging_handle_enter = false;
@@ -238,13 +239,13 @@ static void drawTimeline() {
 			dragging_handle_enter = true;
 		} else if(ImGui::IsMouseReleased(0)) {
 			dragging_handle_enter = false;
-			if(lb_strokes_selected->enter.duration == 0) lb_strokes_selected->enter.method = ANIMATE_NONE;
+			if(lb_strokes_selected->enter.duration == 0) lb_strokes_selected->enter.animate_method = ANIMATE_NONE;
 		}
 		if(mouse_hovering_handle_exit && ImGui::IsMouseClicked(0)) {
 			dragging_handle_exit = true;
 		} else if(ImGui::IsMouseReleased(0)) {
 			dragging_handle_exit = false;
-			if(lb_strokes_selected->exit.duration == 0) lb_strokes_selected->exit.method = ANIMATE_NONE;
+			if(lb_strokes_selected->exit.duration == 0) lb_strokes_selected->exit.animate_method = ANIMATE_NONE;
 		}
 		if(mouse_hovering_handle_right && ImGui::IsMouseClicked(0)) {
 			dragging_handle_right = true;
@@ -294,12 +295,12 @@ static void drawTimeline() {
 		
 		draw_list->AddLine(ImVec2(handle_left.x, handle_left.y - 4), ImVec2(handle_right.x, handle_right.y - 4), ImGui::GetColorU32(ImGuiCol_TextDisabled));
 		
-		if(lb_strokes_selected->enter.method != ANIMATE_NONE) {
+		if(lb_strokes_selected->enter.animate_method != ANIMATE_NONE) {
 			draw_list->AddLine(ImVec2(handle_left.x, handle_left.y), ImVec2(handle_enter.x, handle_enter.y - 4), ImGui::GetColorU32(ImGuiCol_PlotLinesHovered));
 			draw_list->AddLine(ImVec2(handle_enter.x, handle_enter.y - 3), ImVec2(handle_enter.x, handle_enter.y - 15), ImGui::GetColorU32(mouse_hovering_handle_enter || dragging_handle_enter ? ImGuiCol_PlotHistogram : ImGuiCol_PlotHistogramHovered));
 			draw_list->AddRectFilled(ImVec2(handle_enter.x - 6, handle_enter.y - 15), ImVec2(handle_enter.x, handle_enter.y - 9), ImGui::GetColorU32(mouse_hovering_handle_enter || dragging_handle_enter ? ImGuiCol_PlotHistogram : ImGuiCol_PlotHistogramHovered));
 		}
-		if(lb_strokes_selected->exit.method != ANIMATE_NONE) {
+		if(lb_strokes_selected->exit.animate_method != ANIMATE_NONE) {
 			draw_list->AddLine(ImVec2(handle_exit.x, handle_exit.y - 4), ImVec2(handle_right.x, handle_right.y), ImGui::GetColorU32(ImGuiCol_PlotLinesHovered));
 			draw_list->AddLine(ImVec2(handle_exit.x, handle_exit.y - 3), ImVec2(handle_exit.x, handle_exit.y - 15), ImGui::GetColorU32(mouse_hovering_handle_enter || dragging_handle_enter ? ImGuiCol_PlotHistogram : ImGuiCol_PlotHistogramHovered));
 			draw_list->AddRectFilled(ImVec2(handle_exit.x, handle_exit.y - 15), ImVec2(handle_exit.x + 6, handle_exit.y - 9), ImGui::GetColorU32(mouse_hovering_handle_exit || dragging_handle_exit ? ImGuiCol_PlotHistogram : ImGuiCol_PlotHistogramHovered));
@@ -394,17 +395,22 @@ static void drawStrokeProperties() {
 	ImGui::SetNextWindowSize(ImVec2(200, 300));
 	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 200 - 5, 5));
 	ImGui::Begin("Stroke Properties", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
-
+	
 	ImGui::Text("Thickness");
 	ImGui::SliderFloat("##Thickness", &lb_strokes_selected->scale, 1.0f, 15.0f, "pixels = %.2f");
 	
 	ImGui::Separator();
 	
 	static const char* animation_mode_combo = "None\0Draw\0Fade\0";
+	static const char* animation_ease_combo = "Linear\0Quadratic In\0Quadratic Out\0Quadratic In/Out\0Cubic In\0Cubic Out\0Cubic In/Out\0Quartic In\0Quartic Out\0Quartic In/Out\0Quintic In\0Quintic Out\0Quintic In/Out\0Sine In\0Sine Out\0Sine In/Out\0Circular In\0Circular Out\0Circular In/Out\0Exponential In\0Exponential Out\0Exponential In/Out\0Elastic In\0Elastic Out\0Elastic In/Out\0Back In\0Back Out\0Back In/Out\0Bounce In\0Bounce Out\0Bounce In/Out\0";
 	
 	ImGui::Text("Entrance Animation");
-	ImGui::Combo("##enter_method", (int*)&lb_strokes_selected->enter.method, animation_mode_combo);
-	switch(lb_strokes_selected->enter.method) {
+	ImGui::Combo("##enter_method", (int*)&lb_strokes_selected->enter.animate_method, animation_mode_combo);
+	if(lb_strokes_selected->enter.animate_method != ANIMATE_NONE) {
+		ImGui::Combo("##enter_ease", (int*)&lb_strokes_selected->enter.easing_method, animation_ease_combo);
+	}
+	
+	switch(lb_strokes_selected->enter.animate_method) {
 		case ANIMATE_DRAW:
 			ImGui::Checkbox("Reverse", &lb_strokes_selected->enter.draw_reverse);
 		default:
@@ -414,8 +420,12 @@ static void drawStrokeProperties() {
 	ImGui::Separator();
 	
 	ImGui::Text("Exit Animation");
-	ImGui::Combo("##exit_method", (int*)&lb_strokes_selected->exit.method, animation_mode_combo);
-	switch(lb_strokes_selected->exit.method) {
+	ImGui::Combo("##exit_method", (int*)&lb_strokes_selected->exit.animate_method, animation_mode_combo);
+	if(lb_strokes_selected->exit.animate_method != ANIMATE_NONE) {
+		ImGui::Combo("##exit_ease", (int*)&lb_strokes_selected->exit.easing_method, animation_ease_combo);
+	}
+	
+	switch(lb_strokes_selected->exit.animate_method) {
 		case ANIMATE_DRAW:
 			ImGui::Checkbox("Reverse", &lb_strokes_selected->exit.draw_reverse);
 		default:

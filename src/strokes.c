@@ -240,12 +240,12 @@ void lb_strokes_init() {
 		.scale = 10.0f,
 		.vertices_len = 2,
 		.enter = (struct lb_stroke_transition){
-			.method = ANIMATE_DRAW,
+			.animate_method = ANIMATE_DRAW,
 			.duration = 1.0f,
 			.draw_reverse = false,
 		},
 		.exit = (struct lb_stroke_transition){
-			.method = ANIMATE_DRAW,
+			.animate_method = ANIMATE_DRAW,
 			.duration = 1.0f,
 			.draw_reverse = false,
 		},
@@ -266,7 +266,7 @@ static enum draw_state lb_stroke_getDrawStateForTime(const struct lb_stroke* str
 	assert(stroke);
 	if(time < stroke->global_start_time) return NONE;
 	float acc = stroke->global_start_time;
-	if(stroke->enter.method != ANIMATE_NONE) {
+	if(stroke->enter.animate_method != ANIMATE_NONE) {
 		acc += stroke->enter.duration;
 		if(time < acc) return ENTERING;
 	}
@@ -274,7 +274,7 @@ static enum draw_state lb_stroke_getDrawStateForTime(const struct lb_stroke* str
 	acc += stroke->full_duration;
 	if(time < acc) return FULL;
 	
-	if(stroke->exit.method != ANIMATE_NONE) {
+	if(stroke->exit.animate_method != ANIMATE_NONE) {
 		acc += stroke->exit.duration;
 		if(time < acc) return EXITING;
 	}
@@ -309,25 +309,25 @@ void lb_strokes_render() {
 				percent_drawn = 1;
 				break;
 			case ENTERING:
-				percent_drawn = map(
+				percent_drawn = EasingFuncs[data.strokes[i].enter.easing_method](map(
 					lb_strokes_timelinePosition,
 					data.strokes[i].global_start_time,
 					data.strokes[i].global_start_time + data.strokes[i].enter.duration,
-					0, 1);
+					0, 1));
 				reverse = data.strokes[i].enter.draw_reverse;
-				method = data.strokes[i].enter.method;
+				method = data.strokes[i].enter.animate_method;
 				break;
 			case EXITING: {
 				float begin = data.strokes[i].global_start_time +
-					(data.strokes[i].enter.method == ANIMATE_NONE ? 0 : data.strokes[i].enter.duration) +
+					(data.strokes[i].enter.animate_method == ANIMATE_NONE ? 0 : data.strokes[i].enter.duration) +
 					data.strokes[i].full_duration;
 				float end = begin + data.strokes[i].exit.duration;
-				percent_drawn = map(
+				percent_drawn = EasingFuncs[data.strokes[i].exit.easing_method](map(
 					lb_strokes_timelinePosition,
 					begin, end,
-					1, 0);
+					1, 0));
 				reverse = data.strokes[i].exit.draw_reverse;
-				method = data.strokes[i].exit.method;
+				method = data.strokes[i].exit.animate_method;
 				break;
 			}
 		}
@@ -582,12 +582,12 @@ void lb_strokes_handleMouseDown(vec2 point, float time) {
 					.full_duration = 1.0f,
 					.scale = 10.0f,
 					.enter = (struct lb_stroke_transition){
-						.method = ANIMATE_DRAW,
+						.animate_method = ANIMATE_DRAW,
 						.duration = 0.35f,
 						.draw_reverse = false,
 					},
 					.exit = (struct lb_stroke_transition){
-						.method = ANIMATE_DRAW,
+						.animate_method = ANIMATE_DRAW,
 						.duration = 0.35f,
 						.draw_reverse = true,
 					},
