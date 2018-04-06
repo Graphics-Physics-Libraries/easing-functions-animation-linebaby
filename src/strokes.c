@@ -238,6 +238,12 @@ void lb_strokes_init() {
 		.global_start_time = 0,
 		.full_duration = 5.0f,
 		.scale = 10.0f,
+		.thickness_curve = (struct lb_2point_beizer){
+			.a = (vec2){0,0},
+			.h1 = (vec2){0.5f, 0},
+			.h2 = (vec2){0.5f, 1},
+			.b = (vec2){1,1},
+		},
 		.vertices_len = 2,
 		.enter = (struct lb_stroke_transition){
 			.animate_method = ANIMATE_DRAW,
@@ -362,8 +368,6 @@ void lb_strokes_render() {
 		
 		float total_length_drawn = total_length*percent_drawn;
 		//TODO: Optimize out the double calculation of length, cache the total length if possible
-		
-		glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_SCALE], data.strokes[i].scale, data.strokes[i].scale);
 				
 		// Brush
 		float length_accum = 0.0f;
@@ -386,10 +390,9 @@ void lb_strokes_render() {
 			float percent_segment_drawn = (total_length_drawn - length_accum) / segment_length;
 			if(percent_segment_drawn <= 0) break;
 			if(percent_segment_drawn > 1) percent_segment_drawn = 1;
-
+			
 			unsigned int total_equidistant_points_len = (unsigned int)ceil(segment_length / (data.strokes[i].scale / 2.0f));
 			unsigned int drawn_points_len = (unsigned int)ceil(percent_segment_drawn * total_equidistant_points_len) + 1;
-			length_accum += segment_length;
 
 			//TODO: Instanced drawing
 			for(size_t p = 0; p < drawn_points_len; p++) {
@@ -397,6 +400,9 @@ void lb_strokes_render() {
 				glUniform1f(brush_shader.uniforms[BRUSH_UNIFORM_ROTATION], reverse ? (float)total_equidistant_points_len - (float)p : (float)p);
 				glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_TRANSLATION], loc.x, loc.y);
 				
+				vec2 scale = bezier_cubic(data.strokes[i].thickness_curve.a, data.strokes[i].thickness_curve.h1, data.strokes[i].thickness_curve.h2, data.strokes[i].thickness_curve.b, (length_accum / total_length) + (segment_length / total_length) * (p / (float)total_equidistant_points_len));
+				glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_SCALE], data.strokes[i].scale * scale.y, data.strokes[i].scale * scale.y);
+		
 				glUniform1i(brush_shader.uniforms[BRUSH_UNIFORM_MASK_TEXTURE], 0);
 				glActiveTexture(GL_TEXTURE0);
 				glBindTexture(GL_TEXTURE_2D, mask_texture);
@@ -409,6 +415,7 @@ void lb_strokes_render() {
 				glDrawArrays(GL_TRIANGLES, 0, 6);
 			}
 			
+			length_accum += segment_length;
 			if(percent_segment_drawn < 1.0f) break;
 		}
 	}
@@ -661,10 +668,10 @@ void lb_strokes_handleKeyDown(int key, int scancode, int mods) {
 	
 	switch(key) {
 		case GLFW_KEY_LEFT:
-			lb_strokes_timelinePosition -= 0.1f * multiplier;
+			lb_strokes_timelinePosition -= 0.016f * multiplier;
 			break;
 		case GLFW_KEY_RIGHT:
-			lb_strokes_timelinePosition += 0.1f * multiplier;
+			lb_strokes_timelinePosition += 0.016f * multiplier;
 			break;
 		case GLFW_KEY_SPACE:
 			lb_strokes_playing = !lb_strokes_playing;

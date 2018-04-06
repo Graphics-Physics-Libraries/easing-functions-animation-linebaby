@@ -1,7 +1,10 @@
 #include "ui.h"
 
+#define IMGUI_DEFINE_MATH_OPERATORS
+
 #include <inttypes.h>
 #include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 #include <stdio.h>
 
 #include <stdlib.h>
@@ -157,6 +160,89 @@ EXTERN_C void lb_ui_destroy(void(*glDestroy)()) {
 	ImGui::GetIO().Fonts->TexID = 0;
 	ImGui::Shutdown();
 	glDestroy();
+}
+
+static ImVec2 invertY(const ImVec2& v) {
+	return ImVec2(v.x, 1-v.y);
+}
+
+static void draw2PointBezierGraph(struct lb_2point_beizer* data) {
+	// ImGuiStyle& style = ImGui::GetStyle();
+	ImGuiStorage* state = ImGui::GetStateStorage();
+	ImDrawList* draw_list = ImGui::GetWindowDrawList();
+	
+	static const ImVec2 size = ImVec2(150, 150);
+	
+	const ImVec2 min = ImGui::GetCursorScreenPos();
+	const ImVec2 max = min + size;
+
+	// Background
+	draw_list->AddRectFilled(min, max, ImGui::GetColorU32(ImGuiCol_FrameBg), 0);
+	
+	// Lines
+	static const size_t resolution = 20;
+	vec2 last_pt = data->a;
+	for(size_t i = 0; i < resolution; i++) {
+		float t = (i+1) / (float)resolution;
+		vec2 pt = bezier_cubic(data->a, data->h1, data->h2, data->b, t);
+		const ImVec2 im_pt = ImVec2(pt.x, pt.y);
+		const ImVec2 im_last_pt = ImVec2(last_pt.x, last_pt.y);
+		draw_list->AddLine(invertY(im_last_pt) * size + min, invertY(im_pt) * size + min, ImGui::GetColorU32(ImGuiCol_PlotLinesHovered));
+		last_pt = pt;
+	}
+	
+	// Control points
+	const ImVec2 a = ImVec2(data->a.x, 1 - data->a.y);
+	const ImVec2 h1 = ImVec2(data->h1.x, 1 - data->h1.y);
+	const ImVec2 h2 = ImVec2(data->h2.x, 1 - data->h2.y);
+	const ImVec2 b = ImVec2(data->b.x, 1 - data->b.y);
+	
+	draw_list->AddLine(a*size + min, h1*size + min, ImGui::GetColorU32(ImGuiCol_PlotLines));
+	draw_list->AddLine(b*size + min, h2*size + min, ImGui::GetColorU32(ImGuiCol_PlotLines));
+
+	static const ImVec2 ctrlSize = ImVec2(3, 3);
+	bool mouse_hovering_a = ImGui::IsMouseHoveringRect(a*size - ctrlSize + min, a*size + ctrlSize + min);
+	bool mouse_hovering_b = ImGui::IsMouseHoveringRect(b*size - ctrlSize + min, b*size + ctrlSize + min);
+	bool mouse_hovering_h1 = ImGui::IsMouseHoveringRect(h1*size - ctrlSize + min, h1*size + ctrlSize + min);
+	bool mouse_hovering_h2 = ImGui::IsMouseHoveringRect(h2*size - ctrlSize + min, h2*size + ctrlSize + min);
+	
+	static vec2 originalLoc;
+	if(ImGui::IsMouseClicked(0)) {
+		if(mouse_hovering_a) state->SetBool(ImGui::GetID(&data->a), true), originalLoc = data->a;
+		else if(mouse_hovering_b) state->SetBool(ImGui::GetID(&data->b), true), originalLoc = data->b;
+		else if(mouse_hovering_h1) state->SetBool(ImGui::GetID(&data->h1), true), originalLoc = data->h1;
+		else if(mouse_hovering_h2) state->SetBool(ImGui::GetID(&data->h2), true), originalLoc = data->h2;
+	} else if(ImGui::IsMouseReleased(0)) {
+		state->SetBool(ImGui::GetID(&data->a), false);
+		state->SetBool(ImGui::GetID(&data->b), false);
+		state->SetBool(ImGui::GetID(&data->h1), false);
+		state->SetBool(ImGui::GetID(&data->h2), false);
+	} else if(ImGui::IsMouseDragging()) {
+		ImVec2 delta = ImGui::GetMouseDragDelta() / size;
+		
+		// printf("%f, %f\n", delta.x, delta.y);
+		// ImVec2 a = ImGui::GetMousePos();
+		// ImVec2 b = a - min;
+		// printf("%f, %f / %f, %f\n", a.x, a.y, b.x, b.y);
+		if(state->GetBool(ImGui::GetID(&data->a))) {
+			data->a.y = originalLoc.y - delta.y;
+		} else if(state->GetBool(ImGui::GetID(&data->b))) {
+			data->b.y = originalLoc.y - delta.y;
+		} else if(state->GetBool(ImGui::GetID(&data->h1))) {
+			data->h1.x = originalLoc.x + delta.x;
+			data->h1.y = originalLoc.y - delta.y;
+		} else if(state->GetBool(ImGui::GetID(&data->h2))) {
+			data->h2.x = originalLoc.x + delta.x;
+			data->h2.y = originalLoc.y - delta.y;
+		}
+	}
+	
+	draw_list->AddRectFilled(a*size - ctrlSize + min, a*size + ctrlSize + min, ImGui::GetColorU32(mouse_hovering_a ? ImGuiCol_PlotHistogramHovered : ImGuiCol_PlotHistogram));
+	draw_list->AddRectFilled(b*size - ctrlSize + min, b*size + ctrlSize + min, ImGui::GetColorU32(mouse_hovering_b ? ImGuiCol_PlotHistogramHovered : ImGuiCol_PlotHistogram));
+	draw_list->AddCircleFilled(h1 * size + min, 3.0f, ImGui::GetColorU32(mouse_hovering_h1 ? ImGuiCol_PlotHistogramHovered : ImGuiCol_PlotHistogram));
+	draw_list->AddCircleFilled(h2 * size + min, 3.0f, ImGui::GetColorU32(mouse_hovering_h2 ? ImGuiCol_PlotHistogramHovered : ImGuiCol_PlotHistogram));
+	
+	ImGui::Dummy(ImVec2(150, 150));
 }
 
 static void drawTimeline() {
@@ -432,6 +518,11 @@ static void drawStrokeProperties() {
 			break;
 	}
 	
+	ImGui::Separator();
+	
+	ImGui::Text("Stroke Thickness");
+	draw2PointBezierGraph(&lb_strokes_selected->thickness_curve);
+	
 	ImGui::End();
 	ImGui::PopStyleColor();
 }
@@ -464,7 +555,7 @@ EXTERN_C void lb_ui_render(int windowWidth, int windowHeight, int framebufferWid
 	// Start the frame. This call will update the io.WantCaptureMouse, io.WantCaptureKeyboard flag that you can use to dispatch inputs (or not) to your application.
 	ImGui::NewFrame();
 	
-	// if(guiState.showDemoPanel) ImGui::ShowDemoWindow(&guiState.showDemoPanel);
+	if(guiState.showDemoPanel) ImGui::ShowDemoWindow(&guiState.showDemoPanel);
 	drawTools();
 	drawTimeline();
 	drawStrokeProperties();

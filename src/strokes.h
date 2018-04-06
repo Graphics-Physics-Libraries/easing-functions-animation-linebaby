@@ -16,6 +16,13 @@ enum lb_animate_method {
 	ANIMATE_FADE
 };
 
+struct lb_2point_beizer {
+	vec2 a;
+	vec2 h1;
+	vec2 h2;
+	vec2 b;
+};
+
 struct lb_stroke_transition {
 	enum EasingMethod easing_method;
 	enum lb_animate_method animate_method;
@@ -34,6 +41,7 @@ struct lb_stroke {
 	float full_duration;
 	float scale;
 	
+	struct lb_2point_beizer thickness_curve;
 	struct lb_stroke_transition enter;
 	struct lb_stroke_transition exit;
 	
