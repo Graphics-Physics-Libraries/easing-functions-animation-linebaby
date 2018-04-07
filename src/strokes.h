@@ -40,12 +40,15 @@ struct lb_stroke {
 	float global_start_time;
 	float full_duration;
 	float scale;
+	colorf color;
 	
 	struct lb_2point_beizer thickness_curve;
 	struct lb_stroke_transition enter;
 	struct lb_stroke_transition exit;
 	
+	
 	uint16_t vertices_len;
+	
 };
 
 extern color32 lb_clear_color;

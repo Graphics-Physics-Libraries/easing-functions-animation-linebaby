@@ -9,19 +9,54 @@
 
 #include "gl.h"
 #include "util.h"
+#include "pool.h"
 
 #include <GLFW/glfw3.h>
 
-#define VERTICES_CAPACITY 2048
-#define MAX_STROKE_VERTICES 128
+#define MAX_STROKES 64
+#define MAX_STROKE_VERTICES 64
 
 static struct {
-	struct bezier_point vertices[VERTICES_CAPACITY];
+	struct pool* vertices_pool;
 	size_t vertices_len;
 	
-	struct lb_stroke strokes[64];
+	struct lb_stroke strokes[MAX_STROKES];
 	uint8_t strokes_len;
 } data;
+
+
+static struct lb_stroke* create_stroke() {
+	assert(data.strokes_len < MAX_STROKES);
+	
+	struct lb_stroke* stroke = &data.strokes[data.strokes_len++];
+	stroke->vertices = pool_alloc(data.vertices_pool);
+	stroke->vertices_len = 0;
+	return stroke;
+}
+
+static void delete_stroke(struct lb_stroke* stroke) {
+	assert(stroke);
+	
+	pool_free(data.vertices_pool, stroke->vertices);
+	size_t idx = stroke - data.strokes;
+	data.strokes_len--;
+	if(idx) data.strokes[idx] = data.strokes[data.strokes_len]; // swap
+}
+
+static struct bezier_point* add_vertex(struct lb_stroke* stroke) {
+	assert(stroke);
+	return &stroke->vertices[stroke->vertices_len++];
+}
+
+static void delete_vertex(struct lb_stroke* stroke, struct bezier_point* vertex) {
+	assert(stroke);
+	size_t idx = vertex - stroke->vertices;
+	assert(idx > 0);
+	assert(idx < MAX_STROKE_VERTICES);
+	stroke->vertices_len--;
+	if(idx) stroke->vertices[idx] = stroke->vertices[stroke->vertices_len]; // swap
+}
+
 
 // Timeline
 color32 lb_clear_color = (color32){.r = 255, .g = 255, .b = 255, .a = 255};
@@ -72,6 +107,7 @@ enum brush_shader_uniform {
 	BRUSH_UNIFORM_TRANSLATION,
 	BRUSH_UNIFORM_SCALE,
 	BRUSH_UNIFORM_ROTATION,
+	BRUSH_UNIFORM_COLOR,
 	BRUSH_UNIFORM_ALPHA,
 	BRUSH_UNIFORM_MASK_TEXTURE,
 	BRUSH_UNIFORM_BRUSH_TEXTURE
@@ -184,6 +220,7 @@ void lb_strokes_init() {
 			"translation",
 			"scale",
 			"rotation",
+			"brushColor",
 			"brushAlpha",
 			"maskTex",
 			"brushTex"
@@ -217,48 +254,27 @@ void lb_strokes_init() {
 	glEnableVertexAttribArray(0);
 	glCheckError();
 
-
-
 	upload_plane();
 	upload_texture();
-
-	// Seed data
-	data.vertices_len = 2;
-	data.vertices[0] = (struct bezier_point){
-		.anchor = (vec2){100.0f, 100.0f},
-		.handles = {(vec2){50.0f, 100.0f}, (vec2){150.0f, 100.0f}}
-	};
-	data.vertices[1] = (struct bezier_point){
-		.anchor = (vec2){350.0f, 350.0f},
-		.handles = {(vec2){300.0f, 350.0f}, (vec2){400.0f, 350.0f}}
-	};
-	data.strokes_len = 1;
-	data.strokes[0] = (struct lb_stroke){
-		.vertices = &data.vertices[0],
-		.global_start_time = 0,
-		.full_duration = 5.0f,
-		.scale = 10.0f,
-		.thickness_curve = (struct lb_2point_beizer){
-			.a = (vec2){0,0},
-			.h1 = (vec2){0.5f, 0},
-			.h2 = (vec2){0.5f, 1},
-			.b = (vec2){1,1},
-		},
-		.vertices_len = 2,
-		.enter = (struct lb_stroke_transition){
-			.animate_method = ANIMATE_DRAW,
-			.duration = 1.0f,
-			.draw_reverse = false,
-		},
-		.exit = (struct lb_stroke_transition){
-			.animate_method = ANIMATE_DRAW,
-			.duration = 1.0f,
-			.draw_reverse = false,
-		},
-	};
 	
-	lb_strokes_selected = &data.strokes[0];
+	data.vertices_pool = pool_init(sizeof(struct bezier_point) * MAX_STROKE_VERTICES, MAX_STROKES);
 }
+
+static enum drag_mode {
+	DRAG_NONE,
+	DRAG_ANCHOR,
+	DRAG_HANDLE,
+	DRAG_STROKE
+} drag_mode = DRAG_NONE;
+
+struct lb_stroke* lb_strokes_selected = NULL;
+struct bezier_point* lb_strokes_selected_vertex = NULL;
+static vec2* drag_vec = NULL;
+static uint8_t drag_handle_idx = 0;
+static vec2 drag_start;
+static float select_tolerance_dist = 8.0f;
+
+
 
 enum draw_state {
 	NONE = 0, 
@@ -366,6 +382,8 @@ void lb_strokes_render() {
 			glUniform1f(brush_shader.uniforms[BRUSH_UNIFORM_ALPHA], 1);
 		}
 		
+		glUniform4f(brush_shader.uniforms[BRUSH_UNIFORM_COLOR], data.strokes[i].color.r, data.strokes[i].color.g, data.strokes[i].color.b, data.strokes[i].color.a);
+		
 		float total_length_drawn = total_length*percent_drawn;
 		//TODO: Optimize out the double calculation of length, cache the total length if possible
 				
@@ -400,8 +418,8 @@ void lb_strokes_render() {
 				glUniform1f(brush_shader.uniforms[BRUSH_UNIFORM_ROTATION], reverse ? (float)total_equidistant_points_len - (float)p : (float)p);
 				glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_TRANSLATION], loc.x, loc.y);
 				
-				vec2 scale = bezier_cubic(data.strokes[i].thickness_curve.a, data.strokes[i].thickness_curve.h1, data.strokes[i].thickness_curve.h2, data.strokes[i].thickness_curve.b, (length_accum / total_length) + (segment_length / total_length) * (p / (float)total_equidistant_points_len));
-				glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_SCALE], data.strokes[i].scale * scale.y, data.strokes[i].scale * scale.y);
+				//vec2 scale = bezier_cubic(data.strokes[i].thickness_curve.a, data.strokes[i].thickness_curve.h1, data.strokes[i].thickness_curve.h2, data.strokes[i].thickness_curve.b, (length_accum / total_length) + (segment_length / total_length) * (p / (float)total_equidistant_points_len));
+				glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_SCALE], data.strokes[i].scale, data.strokes[i].scale);
 		
 				glUniform1i(brush_shader.uniforms[BRUSH_UNIFORM_MASK_TEXTURE], 0);
 				glActiveTexture(GL_TEXTURE0);
@@ -462,11 +480,11 @@ void lb_strokes_render() {
 		
 		// -- Control points
 		{
-			// Indicate the last drawn point
-			if(lb_strokes_selected == &data.strokes[data.strokes_len-1]) {
+			// Indicate the selected vertex
+			if(lb_strokes_selected_vertex) {
 				glUniform3f(line_shader.uniforms[LINE_UNIFORM_COLOR], 1.0f, 0.0f, 1.0f);
 				glUniform1f(line_shader.uniforms[LINE_UNIFORM_POINT_SIZE], 9.0f);
-				glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2), &lb_strokes_selected->vertices[lb_strokes_selected->vertices_len-1].anchor);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2), &lb_strokes_selected_vertex->anchor);
 				glDrawArrays(GL_POINTS, 0, 1);
 			}
 			
@@ -475,7 +493,7 @@ void lb_strokes_render() {
 
 			glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2) * 3 * lb_strokes_selected->vertices_len, lb_strokes_selected->vertices);
 			glDrawArrays(GL_POINTS, 0, 3 * lb_strokes_selected->vertices_len);
-			
+
 			glUniform3f(line_shader.uniforms[LINE_UNIFORM_COLOR], 1.0f, 1.0f, 1.0f);
 			glUniform1f(line_shader.uniforms[LINE_UNIFORM_POINT_SIZE], 3.0f);
 			
@@ -486,21 +504,6 @@ void lb_strokes_render() {
 		glCheckError();
 	}
 }
-
-static enum drag_mode {
-	DRAG_NONE,
-	DRAG_ANCHOR,
-	DRAG_HANDLE,
-	DRAG_STROKE
-} drag_mode = DRAG_NONE;
-
-struct lb_stroke* lb_strokes_selected = NULL;
-static vec2* drag_vec = NULL;
-static struct bezier_point* drag_point = NULL;
-static uint8_t drag_handle_idx = 0;
-static vec2 drag_start;
-static float select_tolerance_dist = 8.0f;
-
 
 void lb_strokes_handleMouseDown(vec2 point, float time) {
 	switch(input_mode) {
@@ -513,6 +516,7 @@ void lb_strokes_handleMouseDown(vec2 point, float time) {
 						vec2 closest = bezier_closest_point(a->anchor, a->handles[1], b->handles[0], b->anchor, 20, 3, point);
 						if(vec2_dist(point, closest) <= select_tolerance_dist) {
 							lb_strokes_selected = &data.strokes[i];
+							lb_strokes_selected_vertex = NULL;
 							goto exit;
 						}
 					}
@@ -526,18 +530,18 @@ void lb_strokes_handleMouseDown(vec2 point, float time) {
 				if(vec2_dist(point, lb_strokes_selected->vertices[i].anchor) <= select_tolerance_dist) {
 					drag_mode = DRAG_ANCHOR;
 					drag_vec = &lb_strokes_selected->vertices[i].anchor;
-					drag_point = &lb_strokes_selected->vertices[i];
+					lb_strokes_selected_vertex = &lb_strokes_selected->vertices[i];
 					break;
 				} else if(vec2_dist(point, lb_strokes_selected->vertices[i].handles[0]) <= select_tolerance_dist) {
 					drag_mode = DRAG_HANDLE;
 					drag_vec = &lb_strokes_selected->vertices[i].handles[0];
-					drag_point = &lb_strokes_selected->vertices[i];
+					lb_strokes_selected_vertex = &lb_strokes_selected->vertices[i];
 					drag_handle_idx = 0;
 					break;
 				} else if(vec2_dist(point, lb_strokes_selected->vertices[i].handles[1]) <= select_tolerance_dist) {
 					drag_mode = DRAG_HANDLE;
 					drag_vec = &lb_strokes_selected->vertices[i].handles[1];
-					drag_point = &lb_strokes_selected->vertices[i];
+					lb_strokes_selected_vertex = &lb_strokes_selected->vertices[i];
 					drag_handle_idx = 1;
 					break;
 				}
@@ -556,6 +560,7 @@ void lb_strokes_handleMouseDown(vec2 point, float time) {
 				}
 			}
 			lb_strokes_selected = NULL; // not close enough to any points, so must be a deselect
+			lb_strokes_selected_vertex = NULL;
 			
 			break;
 			
@@ -578,45 +583,40 @@ void lb_strokes_handleMouseDown(vec2 point, float time) {
 		}
 
 		case INPUT_DRAW: {
-			if(!lb_strokes_selected || lb_strokes_selected != &data.strokes[data.strokes_len-1]) {
-				lb_strokes_selected = &data.strokes[data.strokes_len];
-				data.strokes_len++;
-
-				*lb_strokes_selected = (struct lb_stroke){
-					.vertices = &data.vertices[data.vertices_len],
-					.vertices_len = 0,
-					.global_start_time = lb_strokes_timelinePosition,
-					.full_duration = 1.0f,
-					.scale = 10.0f,
-					.enter = (struct lb_stroke_transition){
-						.animate_method = ANIMATE_DRAW,
-						.duration = 0.35f,
-						.draw_reverse = false,
-					},
-					.exit = (struct lb_stroke_transition){
-						.animate_method = ANIMATE_DRAW,
-						.duration = 0.35f,
-						.draw_reverse = true,
-					},
-				};
+			if(!lb_strokes_selected) {
+				// Prevent exceeding maximum strokes
+				if(data.strokes_len >= MAX_STROKES) return;
 				
+				lb_strokes_selected = create_stroke();
+				lb_strokes_selected->global_start_time = lb_strokes_timelinePosition - 0.35f;
+				lb_strokes_selected->full_duration = 1.0f;
+				lb_strokes_selected->scale = 8.0f;
+				lb_strokes_selected->color = (colorf){0,0,0,1};
+				lb_strokes_selected->enter = (struct lb_stroke_transition){
+					.animate_method = ANIMATE_DRAW,
+					.duration = 0.35f,
+					.draw_reverse = false,
+				};
+				lb_strokes_selected->exit = (struct lb_stroke_transition){
+					.animate_method = ANIMATE_DRAW,
+					.duration = 0.35f,
+					.draw_reverse = true,
+				};
 			}
 			
-			assert(lb_strokes_selected->vertices_len < MAX_STROKE_VERTICES);
-			assert(data.vertices_len < VERTICES_CAPACITY);
+			// Prevent exceeding maximum vertices
+			if(lb_strokes_selected->vertices_len >= MAX_STROKE_VERTICES) return;
 			
-			lb_strokes_selected->vertices[lb_strokes_selected->vertices_len].anchor = point;
-			lb_strokes_selected->vertices[lb_strokes_selected->vertices_len].handles[0] = (vec2){point.x - 20, point.y};
-			lb_strokes_selected->vertices[lb_strokes_selected->vertices_len].handles[1] = (vec2){point.x + 20, point.y};
+			struct bezier_point* vert = add_vertex(lb_strokes_selected);
+			vert->anchor = point;
+			vert->handles[0] = (vec2){point.x - 20, point.y};
+			vert->handles[1] = (vec2){point.x + 20, point.y};
 
 			// Enable dragging of handle
 			drag_mode = DRAG_HANDLE;
-			drag_point = &lb_strokes_selected->vertices[lb_strokes_selected->vertices_len];
-			drag_vec = &drag_point->handles[0];
+			lb_strokes_selected_vertex = vert;
+			drag_vec = &lb_strokes_selected_vertex->handles[0];
 			drag_handle_idx = 0;
-			
-			lb_strokes_selected->vertices_len++;
-			data.vertices_len++;
 			
 			break;
 		}
@@ -628,20 +628,20 @@ void lb_strokes_handleMouseMove(vec2 point, float time) {
 		case DRAG_NONE:
 			return;
 		case DRAG_ANCHOR: {
-			assert(drag_point);
+			assert(lb_strokes_selected_vertex);
 			assert(drag_vec);
 			vec2 diff = vec2_sub(point, *drag_vec);
 			*drag_vec = point;
-			drag_point->handles[0] = vec2_add(drag_point->handles[0], diff);
-			drag_point->handles[1] = vec2_add(drag_point->handles[1], diff);
+			lb_strokes_selected_vertex->handles[0] = vec2_add(lb_strokes_selected_vertex->handles[0], diff);
+			lb_strokes_selected_vertex->handles[1] = vec2_add(lb_strokes_selected_vertex->handles[1], diff);
 			break;
 		}
 		case DRAG_HANDLE: {
-			assert(drag_point);			
+			assert(lb_strokes_selected_vertex);			
 			*drag_vec = point;
 			// mirror the other point
-			drag_point->handles[drag_handle_idx ? 0 : 1].x = 2*drag_point->anchor.x - point.x;
-			drag_point->handles[drag_handle_idx ? 0 : 1].y = 2*drag_point->anchor.y - point.y;
+			lb_strokes_selected_vertex->handles[drag_handle_idx ? 0 : 1].x = 2*lb_strokes_selected_vertex->anchor.x - point.x;
+			lb_strokes_selected_vertex->handles[drag_handle_idx ? 0 : 1].y = 2*lb_strokes_selected_vertex->anchor.y - point.y;
 			break;
 		}
 		case DRAG_STROKE: {
@@ -682,10 +682,18 @@ void lb_strokes_handleKeyDown(int key, int scancode, int mods) {
 			break;
 		case GLFW_KEY_ESCAPE:
 			lb_strokes_selected = NULL;
+			lb_strokes_selected_vertex = NULL;
 			break;
 		case GLFW_KEY_BACKSPACE:
 		case GLFW_KEY_DELETE:
-			// TODO: Cleanup
+			if(lb_strokes_selected && lb_strokes_selected_vertex) {
+				delete_vertex(lb_strokes_selected, lb_strokes_selected_vertex);
+				lb_strokes_selected_vertex = NULL;
+				if(lb_strokes_selected->vertices_len <= 1) delete_stroke(lb_strokes_selected), lb_strokes_selected = NULL;
+			} else if(lb_strokes_selected) {
+				delete_stroke(lb_strokes_selected);
+				lb_strokes_selected = NULL;
+			}
 			break;
 	}
 }

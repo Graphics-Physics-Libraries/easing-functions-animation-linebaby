@@ -482,6 +482,11 @@ static void drawStrokeProperties() {
 	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 200 - 5, 5));
 	ImGui::Begin("Stroke Properties", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 	
+	ImGui::Text("Color");
+	ImGui::ColorEdit4("##Color", (float*)&lb_strokes_selected->color, ImGuiColorEditFlags_RGB | ImGuiColorEditFlags_Uint8);
+
+	ImGui::Separator();
+	
 	ImGui::Text("Thickness");
 	ImGui::SliderFloat("##Thickness", &lb_strokes_selected->scale, 1.0f, 15.0f, "pixels = %.2f");
 	
@@ -498,7 +503,9 @@ static void drawStrokeProperties() {
 	
 	switch(lb_strokes_selected->enter.animate_method) {
 		case ANIMATE_DRAW:
+			ImGui::PushID(&lb_strokes_selected->enter.draw_reverse);
 			ImGui::Checkbox("Reverse", &lb_strokes_selected->enter.draw_reverse);
+			ImGui::PopID();
 		default:
 			break;
 	}
@@ -513,15 +520,19 @@ static void drawStrokeProperties() {
 	
 	switch(lb_strokes_selected->exit.animate_method) {
 		case ANIMATE_DRAW:
+			ImGui::PushID(&lb_strokes_selected->exit.draw_reverse);
 			ImGui::Checkbox("Reverse", &lb_strokes_selected->exit.draw_reverse);
+			ImGui::PopID();
 		default:
 			break;
 	}
 	
+	/*
 	ImGui::Separator();
 	
 	ImGui::Text("Stroke Thickness");
 	draw2PointBezierGraph(&lb_strokes_selected->thickness_curve);
+	*/
 	
 	ImGui::End();
 	ImGui::PopStyleColor();
