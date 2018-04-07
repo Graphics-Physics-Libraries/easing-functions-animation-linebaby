@@ -31,6 +31,13 @@ typedef union color32 {
 	uint32_t u;
 } color32;
 
+typedef struct colorf {
+	float r;
+	float g;
+	float b;
+	float a;
+} colorf;
+
 vec2 bezier_cubic(const vec2 a, const vec2 h1, const vec2 h2, const vec2 b, const float t);
 float bezier_estimate_length(const vec2 a, const vec2 h1, const vec2 h2, const vec2 b);
 uint16_t hyperbola_min_segments(const float length);
