@@ -51,7 +51,7 @@ static struct bezier_point* add_vertex(struct lb_stroke* stroke) {
 static void delete_vertex(struct lb_stroke* stroke, struct bezier_point* vertex) {
 	assert(stroke);
 	size_t idx = vertex - stroke->vertices;
-	assert(idx > 0);
+	assert(idx >= 0);
 	assert(idx < MAX_STROKE_VERTICES);
 	stroke->vertices_len--;
 	if(idx) stroke->vertices[idx] = stroke->vertices[stroke->vertices_len]; // swap
@@ -65,6 +65,9 @@ float lb_strokes_timelineDuration = 10.0f;
 float lb_strokes_timelinePosition = 5.0f;
 bool lb_strokes_draggingPlayhead = false;
 enum lb_input_mode input_mode = INPUT_DRAW;
+bool lb_strokes_artboard_set = false;
+int lb_strokes_artboard_set_idx = -1;
+vec2 lb_strokes_artboard[2];
 
 float lb_strokes_setTimelinePosition(float pos) {
 	pos = (pos < 0.0f ? 0.0f : pos);
@@ -268,16 +271,23 @@ static enum drag_mode {
 } drag_mode = DRAG_NONE;
 
 struct lb_stroke* lb_strokes_selected = NULL;
+struct lb_stroke* lb_strokes_selected_tmp = NULL;
 struct bezier_point* lb_strokes_selected_vertex = NULL;
 static vec2* drag_vec = NULL;
 static uint8_t drag_handle_idx = 0;
 static vec2 drag_start;
 static float select_tolerance_dist = 8.0f;
 
-
+enum mods {
+	MOD_ALT = 0,
+	MOD_SHIFT,
+	MOD_META,
+	MOD__COUNT
+};
+static bool mods_pressed[MOD__COUNT];
 
 enum draw_state {
-	NONE = 0, 
+	NONE = 0,
 	ENTERING,
 	FULL,
 	EXITING
@@ -438,7 +448,7 @@ void lb_strokes_render() {
 		}
 	}
 
-	if(lb_strokes_selected) {
+	if(lb_strokes_selected && input_mode != INPUT_ARTBOARD) {
 		// Draw lines
 		glUseProgram(line_shader.program);
 		glEnable(GL_PROGRAM_POINT_SIZE);
@@ -502,6 +512,29 @@ void lb_strokes_render() {
 		}
 
 		glCheckError();
+	}
+	
+	// Artboard box
+	if(lb_strokes_artboard_set || lb_strokes_artboard_set_idx == 1) {
+		
+		glUseProgram(line_shader.program);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+		glUniformMatrix4fv(line_shader.uniforms[LINE_UNIFORM_PROJECTION], 1, GL_FALSE, (const GLfloat*) screen_ortho);
+
+		glBindVertexArray(gl_lines.vao);
+		glBindBuffer(GL_ARRAY_BUFFER, gl_lines.vbo);
+		
+		glUniform3f(line_shader.uniforms[LINE_UNIFORM_COLOR], 0.75f, 0.75f, 0.75f);
+		vec2 corners[5];
+		corners[0] = lb_strokes_artboard[0];
+		corners[2] = lb_strokes_artboard[1];
+		corners[1] = (vec2){corners[0].x, corners[2].y};
+		corners[3] = (vec2){corners[2].x, corners[0].y};
+		corners[4] = lb_strokes_artboard[0];
+		
+		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2)*5, corners);
+		glDrawArrays(GL_LINE_STRIP, 0, 5);
 	}
 }
 
@@ -620,10 +653,31 @@ void lb_strokes_handleMouseDown(vec2 point, float time) {
 			
 			break;
 		}
+		
+		case INPUT_ARTBOARD: {
+			lb_strokes_artboard[lb_strokes_artboard_set_idx] = point;
+			switch(lb_strokes_artboard_set_idx) {
+				case 0:
+					lb_strokes_artboard_set_idx++;
+					lb_strokes_artboard[lb_strokes_artboard_set_idx] = point;
+					break;
+				case 1:
+					lb_strokes_artboard_set = true;
+					lb_strokes_artboard_set_idx = -1;
+					input_mode = INPUT_SELECT;
+					break;
+			}
+		}
 	}
 }
 
 void lb_strokes_handleMouseMove(vec2 point, float time) {
+	
+	if(input_mode == INPUT_ARTBOARD && lb_strokes_artboard_set_idx == 1) {
+		lb_strokes_artboard[1] = point;
+		return;
+	}
+	
 	switch(drag_mode) {
 		case DRAG_NONE:
 			return;
@@ -639,6 +693,8 @@ void lb_strokes_handleMouseMove(vec2 point, float time) {
 		case DRAG_HANDLE: {
 			assert(lb_strokes_selected_vertex);			
 			*drag_vec = point;
+			if(mods_pressed[MOD_ALT]) break;
+			
 			// mirror the other point
 			lb_strokes_selected_vertex->handles[drag_handle_idx ? 0 : 1].x = 2*lb_strokes_selected_vertex->anchor.x - point.x;
 			lb_strokes_selected_vertex->handles[drag_handle_idx ? 0 : 1].y = 2*lb_strokes_selected_vertex->anchor.y - point.y;
@@ -695,6 +751,10 @@ void lb_strokes_handleKeyDown(int key, int scancode, int mods) {
 				lb_strokes_selected = NULL;
 			}
 			break;
+		case GLFW_KEY_LEFT_ALT:
+		case GLFW_KEY_RIGHT_ALT:
+			mods_pressed[MOD_ALT] = true;
+			break;
 	}
 }
 
@@ -713,5 +773,10 @@ void lb_strokes_handleKeyRepeat(int key, int scancode, int mods) {
 }
 
 void lb_strokes_handleKeyUp(int key, int scancode, int mods) {
-
+	switch(key) {
+		case GLFW_KEY_LEFT_ALT:
+		case GLFW_KEY_RIGHT_ALT:
+			mods_pressed[MOD_ALT] = false;
+			break;
+	}
 }

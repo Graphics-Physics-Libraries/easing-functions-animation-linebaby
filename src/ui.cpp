@@ -99,8 +99,66 @@ static void renderImGuiDrawLists(ImDrawData* data) {
 	}
 }
 
+void SetStyleColors() {
+	ImGuiStyle& style = ImGui::GetStyle();
+	ImVec4* colors = style.Colors;
+	style.FramePadding = ImVec2(4.0f,2.0f);
+	style.ItemSpacing = ImVec2(8.0f,4.0f);
+	style.WindowRounding = 2.0f;
+	style.ChildRounding = 2.0f;
+	style.FrameRounding = 0.0f;
+	style.ScrollbarRounding = 0.0f;
+	style.GrabRounding = 1.0f;
+	style.WindowBorderSize = 1.0f;
+	style.FrameBorderSize = 1.0f;
+	colors[ImGuiCol_Text]                   = ImVec4(0.00f, 0.00f, 0.00f, 0.85f);
+	colors[ImGuiCol_TextDisabled]           = ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
+	colors[ImGuiCol_WindowBg]               = ImVec4(0.94f, 0.94f, 0.94f, 1.00f);
+	colors[ImGuiCol_ChildBg]                = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+	colors[ImGuiCol_PopupBg]                = ImVec4(1.00f, 1.00f, 1.00f, 0.98f);
+	colors[ImGuiCol_Border]                 = ImVec4(0.00f, 0.00f, 0.00f, 0.44f);
+	colors[ImGuiCol_BorderShadow]           = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+	colors[ImGuiCol_FrameBg]                = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
+	colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.64f, 0.65f, 0.66f, 0.40f);
+	colors[ImGuiCol_FrameBgActive]          = ImVec4(0.64f, 0.65f, 0.66f, 0.40f);
+	colors[ImGuiCol_TitleBg]                = ImVec4(0.82f, 0.82f, 0.82f, 1.00f);
+	colors[ImGuiCol_TitleBgActive]          = ImVec4(0.71f, 0.70f, 0.70f, 1.00f);
+	colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(1.00f, 1.00f, 1.00f, 0.51f);
+	colors[ImGuiCol_MenuBarBg]              = ImVec4(0.86f, 0.86f, 0.86f, 1.00f);
+	colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.98f, 0.98f, 0.98f, 0.53f);
+	colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.69f, 0.69f, 0.69f, 0.80f);
+	colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.49f, 0.49f, 0.49f, 0.80f);
+	colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.49f, 0.49f, 0.49f, 1.00f);
+	colors[ImGuiCol_CheckMark]              = ImVec4(0.43f, 0.43f, 0.43f, 1.00f);
+	colors[ImGuiCol_SliderGrab]             = ImVec4(0.63f, 0.63f, 0.63f, 0.78f);
+	colors[ImGuiCol_SliderGrabActive]       = ImVec4(0.43f, 0.44f, 0.46f, 0.78f);
+	colors[ImGuiCol_Button]                 = ImVec4(0.61f, 0.61f, 0.62f, 0.40f);
+	colors[ImGuiCol_ButtonHovered]          = ImVec4(0.57f, 0.57f, 0.57f, 0.52f);
+	colors[ImGuiCol_ButtonActive]           = ImVec4(0.61f, 0.63f, 0.64f, 1.00f);
+	colors[ImGuiCol_Header]                 = ImVec4(0.64f, 0.64f, 0.65f, 0.31f);
+	colors[ImGuiCol_HeaderHovered]          = ImVec4(0.58f, 0.58f, 0.59f, 0.55f);
+	colors[ImGuiCol_HeaderActive]           = ImVec4(0.52f, 0.52f, 0.52f, 0.55f);
+	colors[ImGuiCol_Separator]              = ImVec4(0.56f, 0.56f, 0.56f, 1.00f);
+	colors[ImGuiCol_SeparatorHovered]       = ImVec4(0.17f, 0.17f, 0.17f, 0.89f);
+	colors[ImGuiCol_SeparatorActive]        = ImVec4(0.17f, 0.17f, 0.17f, 0.89f);
+	colors[ImGuiCol_ResizeGrip]             = ImVec4(0.80f, 0.80f, 0.80f, 0.56f);
+	colors[ImGuiCol_ResizeGripHovered]      = ImVec4(0.39f, 0.39f, 0.40f, 0.67f);
+	colors[ImGuiCol_ResizeGripActive]       = ImVec4(0.39f, 0.39f, 0.40f, 0.67f);
+	colors[ImGuiCol_PlotLines]              = ImVec4(0.39f, 0.39f, 0.39f, 1.00f);
+	colors[ImGuiCol_PlotLinesHovered]       = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
+	colors[ImGuiCol_PlotHistogram]          = ImVec4(0.78f, 0.78f, 0.78f, 1.00f);
+	colors[ImGuiCol_PlotHistogramHovered]   = ImVec4(0.56f, 0.56f, 0.56f, 1.00f);
+	colors[ImGuiCol_TextSelectedBg]         = ImVec4(0.71f, 0.72f, 0.73f, 0.57f);
+	colors[ImGuiCol_ModalWindowDarkening]   = ImVec4(0.20f, 0.20f, 0.20f, 0.35f);
+	colors[ImGuiCol_DragDropTarget]         = ImVec4(0.16f, 0.16f, 0.17f, 0.95f);
+}
+
 static struct {
+	bool showFileSettingsPanel = false;
+	
+	#ifdef DEBUG
 	bool showDemoPanel = true;
+	#endif
 } guiState;
 
 static GLuint ui_sprite_texID;
@@ -120,6 +178,7 @@ EXTERN_C void lb_ui_init(
 	scrollAccumulator = 0.0f;
 	lastMouseX = lastMouseY = 0;
 	
+	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 	io.IniFilename = NULL;
 	
@@ -133,10 +192,8 @@ EXTERN_C void lb_ui_init(
 	
 	// Store our identifier
 	io.Fonts->TexID = (void *)(intptr_t) fontTextureID;
-	
-	io.RenderDrawListsFn = renderImGuiDrawLists;
-	
-	ImGui::StyleColorsDark();
+		
+	SetStyleColors();
 	
 	// Load custom spritesheet
 	uint32_t ui_sprite_width, ui_sprite_height;
@@ -158,7 +215,7 @@ EXTERN_C void lb_ui_init(
 
 EXTERN_C void lb_ui_destroy(void(*glDestroy)()) {
 	ImGui::GetIO().Fonts->TexID = 0;
-	ImGui::Shutdown();
+	ImGui::DestroyContext();
 	glDestroy();
 }
 
@@ -166,96 +223,18 @@ static ImVec2 invertY(const ImVec2& v) {
 	return ImVec2(v.x, 1-v.y);
 }
 
-static void draw2PointBezierGraph(struct lb_2point_beizer* data) {
-	// ImGuiStyle& style = ImGui::GetStyle();
-	ImGuiStorage* state = ImGui::GetStateStorage();
-	ImDrawList* draw_list = ImGui::GetWindowDrawList();
-	
-	static const ImVec2 size = ImVec2(150, 150);
-	
-	const ImVec2 min = ImGui::GetCursorScreenPos();
-	const ImVec2 max = min + size;
-
-	// Background
-	draw_list->AddRectFilled(min, max, ImGui::GetColorU32(ImGuiCol_FrameBg), 0);
-	
-	// Lines
-	static const size_t resolution = 20;
-	vec2 last_pt = data->a;
-	for(size_t i = 0; i < resolution; i++) {
-		float t = (i+1) / (float)resolution;
-		vec2 pt = bezier_cubic(data->a, data->h1, data->h2, data->b, t);
-		const ImVec2 im_pt = ImVec2(pt.x, pt.y);
-		const ImVec2 im_last_pt = ImVec2(last_pt.x, last_pt.y);
-		draw_list->AddLine(invertY(im_last_pt) * size + min, invertY(im_pt) * size + min, ImGui::GetColorU32(ImGuiCol_PlotLinesHovered));
-		last_pt = pt;
-	}
-	
-	// Control points
-	const ImVec2 a = ImVec2(data->a.x, 1 - data->a.y);
-	const ImVec2 h1 = ImVec2(data->h1.x, 1 - data->h1.y);
-	const ImVec2 h2 = ImVec2(data->h2.x, 1 - data->h2.y);
-	const ImVec2 b = ImVec2(data->b.x, 1 - data->b.y);
-	
-	draw_list->AddLine(a*size + min, h1*size + min, ImGui::GetColorU32(ImGuiCol_PlotLines));
-	draw_list->AddLine(b*size + min, h2*size + min, ImGui::GetColorU32(ImGuiCol_PlotLines));
-
-	static const ImVec2 ctrlSize = ImVec2(3, 3);
-	bool mouse_hovering_a = ImGui::IsMouseHoveringRect(a*size - ctrlSize + min, a*size + ctrlSize + min);
-	bool mouse_hovering_b = ImGui::IsMouseHoveringRect(b*size - ctrlSize + min, b*size + ctrlSize + min);
-	bool mouse_hovering_h1 = ImGui::IsMouseHoveringRect(h1*size - ctrlSize + min, h1*size + ctrlSize + min);
-	bool mouse_hovering_h2 = ImGui::IsMouseHoveringRect(h2*size - ctrlSize + min, h2*size + ctrlSize + min);
-	
-	static vec2 originalLoc;
-	if(ImGui::IsMouseClicked(0)) {
-		if(mouse_hovering_a) state->SetBool(ImGui::GetID(&data->a), true), originalLoc = data->a;
-		else if(mouse_hovering_b) state->SetBool(ImGui::GetID(&data->b), true), originalLoc = data->b;
-		else if(mouse_hovering_h1) state->SetBool(ImGui::GetID(&data->h1), true), originalLoc = data->h1;
-		else if(mouse_hovering_h2) state->SetBool(ImGui::GetID(&data->h2), true), originalLoc = data->h2;
-	} else if(ImGui::IsMouseReleased(0)) {
-		state->SetBool(ImGui::GetID(&data->a), false);
-		state->SetBool(ImGui::GetID(&data->b), false);
-		state->SetBool(ImGui::GetID(&data->h1), false);
-		state->SetBool(ImGui::GetID(&data->h2), false);
-	} else if(ImGui::IsMouseDragging()) {
-		ImVec2 delta = ImGui::GetMouseDragDelta() / size;
-		
-		// printf("%f, %f\n", delta.x, delta.y);
-		// ImVec2 a = ImGui::GetMousePos();
-		// ImVec2 b = a - min;
-		// printf("%f, %f / %f, %f\n", a.x, a.y, b.x, b.y);
-		if(state->GetBool(ImGui::GetID(&data->a))) {
-			data->a.y = originalLoc.y - delta.y;
-		} else if(state->GetBool(ImGui::GetID(&data->b))) {
-			data->b.y = originalLoc.y - delta.y;
-		} else if(state->GetBool(ImGui::GetID(&data->h1))) {
-			data->h1.x = originalLoc.x + delta.x;
-			data->h1.y = originalLoc.y - delta.y;
-		} else if(state->GetBool(ImGui::GetID(&data->h2))) {
-			data->h2.x = originalLoc.x + delta.x;
-			data->h2.y = originalLoc.y - delta.y;
-		}
-	}
-	
-	draw_list->AddRectFilled(a*size - ctrlSize + min, a*size + ctrlSize + min, ImGui::GetColorU32(mouse_hovering_a ? ImGuiCol_PlotHistogramHovered : ImGuiCol_PlotHistogram));
-	draw_list->AddRectFilled(b*size - ctrlSize + min, b*size + ctrlSize + min, ImGui::GetColorU32(mouse_hovering_b ? ImGuiCol_PlotHistogramHovered : ImGuiCol_PlotHistogram));
-	draw_list->AddCircleFilled(h1 * size + min, 3.0f, ImGui::GetColorU32(mouse_hovering_h1 ? ImGuiCol_PlotHistogramHovered : ImGuiCol_PlotHistogram));
-	draw_list->AddCircleFilled(h2 * size + min, 3.0f, ImGui::GetColorU32(mouse_hovering_h2 ? ImGuiCol_PlotHistogramHovered : ImGuiCol_PlotHistogram));
-	
-	ImGui::Dummy(ImVec2(150, 150));
-}
-
 static void drawTimeline() {
-	const int timeline_height = 18;
-	const int handle_height = 18;
-	const int total_height = timeline_height + handle_height;
-
+	static const int timeline_height = 18;
+	static const int handle_height = 18;
+	static const int total_height = timeline_height + handle_height;
+	
 	ImGuiIO& io = ImGui::GetIO();
 	ImGuiStyle& style = ImGui::GetStyle();
 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-	ImGui::PushStyleColor(ImGuiCol_WindowBg, 0);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+	ImGui::SetNextWindowBgAlpha(0);
 	ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, total_height));
 	ImGui::SetNextWindowPos(ImVec2(0, io.DisplaySize.y - total_height));
 	ImGui::Begin("Timeline", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
@@ -264,8 +243,8 @@ static void drawTimeline() {
 	const ImVec2 timeline_min = ImVec2(0, io.DisplaySize.y - timeline_height);
 	const ImVec2 timeline_max = ImVec2(io.DisplaySize.x, io.DisplaySize.y);
 	float playhead_pos_x = lb_strokes_timelinePosition / lb_strokes_timelineDuration * io.DisplaySize.x;
-	draw_list->AddRectFilled(timeline_min, timeline_max, ImGui::GetColorU32(ImGuiCol_Border), 0);
-	draw_list->AddRectFilled(timeline_min, ImVec2(timeline_min.x + playhead_pos_x, timeline_max.y), ImGui::GetColorU32(ImGuiCol_FrameBg), 0);
+	draw_list->AddRectFilled(timeline_min, timeline_max, ImGui::GetColorU32(ImGuiCol_WindowBg), 0);
+	// draw_list->AddRectFilled(timeline_min, ImVec2(timeline_min.x + playhead_pos_x, timeline_max.y), ImGui::GetColorU32(ImGuiCol_FrameBg), 0);
 	
 	bool mouse_hovering_playhead = ImGui::IsMouseHoveringRect(ImVec2(timeline_min.x + playhead_pos_x - timeline_height/2, timeline_min.y), ImVec2(timeline_min.x + playhead_pos_x + timeline_height/2, timeline_max.y));
 	bool mouse_hovering_timeline = ImGui::IsMouseHoveringRect(timeline_min, timeline_max);
@@ -275,12 +254,12 @@ static void drawTimeline() {
 		ImVec2(timeline_min.x + playhead_pos_x, timeline_min.y),
 		ImVec2(timeline_min.x + playhead_pos_x - timeline_height/2, timeline_min.y + timeline_height/2),
 		ImVec2(timeline_min.x + playhead_pos_x + timeline_height/2, timeline_min.y + timeline_height/2),
-		ImGui::GetColorU32(playhead_color));
+		ImGui::GetColorU32(ImGuiCol_PlotLinesHovered));
 	draw_list->AddTriangleFilled(
 		ImVec2(timeline_min.x + playhead_pos_x - timeline_height/2, timeline_min.y + timeline_height/2),
 		ImVec2(timeline_min.x + playhead_pos_x + timeline_height/2, timeline_min.y + timeline_height/2),
 		ImVec2(timeline_min.x + playhead_pos_x, timeline_max.y),
-		ImGui::GetColorU32(playhead_color));
+		ImGui::GetColorU32(ImGuiCol_PlotLinesHovered));
 
 	if(mouse_hovering_timeline && ImGui::IsMouseClicked(0)) {
 		lb_strokes_draggingPlayhead = true;
@@ -408,7 +387,7 @@ static void drawTimeline() {
 
 	ImGui::PopStyleVar();
 	ImGui::PopStyleVar();
-	ImGui::PopStyleColor();
+	ImGui::PopStyleVar();
 
 	if(mouse_hovering_playhead || lb_strokes_draggingPlayhead) {
 		// TODO: Calculate this better
@@ -429,13 +408,13 @@ static void drawTools() {
 	static const ImVec2 cursor_uv1 = ImVec2(0.25f, 0.75f);
 	static const ImVec2 pencil_uv0 = ImVec2(0.25f, 1.0f);
 	static const ImVec2 pencil_uv1 = ImVec2(0.5f, 0.75f);
+	static const ImVec2 artbrd_uv0 = ImVec2(0.5f, 1.0f);
+	static const ImVec2 artbrd_uv1 = ImVec2(0.75f, 0.75f);
+	static const ImVec2 settings_uv0 = ImVec2(0.75f, 1.0f);
+	static const ImVec2 settings_uv1 = ImVec2(1.0f, 0.75f);
 	
-	//ImGuiIO& io = ImGui::GetIO();
 	ImGuiStyle& style = ImGui::GetStyle();
 	
-	ImColor bg = style.Colors[ImGuiCol_WindowBg];
-	bg.Value.w = 0.2f;
-	ImGui::PushStyleColor(ImGuiCol_WindowBg, bg.Value);
 	ImGui::SetNextWindowSize(ImVec2(32, 32));
 	ImGui::SetNextWindowPos(style.WindowPadding);
 	ImGui::Begin("Tools", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
@@ -451,6 +430,10 @@ static void drawTools() {
 			uv0 = &cursor_uv0;
 			uv1 = &cursor_uv1;
 			break;
+		case INPUT_ARTBOARD:
+			uv0 = &artbrd_uv0;
+			uv1 = &artbrd_uv1;
+			break;
 	}
 	
 	if(ImGui::IsMouseClicked(0) && ImGui::IsMouseHoveringWindow()) {
@@ -461,23 +444,109 @@ static void drawTools() {
 			case INPUT_SELECT:
 				input_mode = INPUT_DRAW;
 				break;
+			default:
+				input_mode = INPUT_SELECT;
 		}
+	}
+	
+	if(ImGui::IsMouseHoveringWindow()) {
+		ImGui::BeginTooltip();
+		switch(input_mode) {
+			case INPUT_DRAW:
+				ImGui::Text("Draw");
+				break;
+			case INPUT_SELECT:
+				ImGui::Text("Select");
+				break;
+			case INPUT_ARTBOARD:
+				ImGui::Text("Artboard");
+				break;
+		}
+		ImGui::EndTooltip();
 	}
 	
 	ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), *uv0, *uv1, ImVec4(1,1,1,1));
 	
+	ImGui::End();	
+	
+	static bool hovering_settings = false;
+	static bool show_settings_menu = false;
+	ImGui::PushStyleColor(ImGuiCol_Border, ImGui::GetColorU32(ImVec4(0,0,0,0)));
+	ImGui::SetNextWindowSize(ImVec2(32, 32));
+	ImGui::SetNextWindowBgAlpha(0);
+	ImGui::SetNextWindowPos(style.WindowPadding + ImVec2(0, 32));
+	ImGui::Begin("Settings Button", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+	show_settings_menu = false;
+	ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), settings_uv0, settings_uv1, ImVec4(1,1,1,1));
+		
+	if(ImGui::IsMouseHoveringWindow()) {
+		hovering_settings = true;
+		if(ImGui::IsMouseClicked(0)) show_settings_menu = true;
+	} else {
+		hovering_settings = false;
+	}
+	
 	ImGui::End();
 	ImGui::PopStyleColor();
+	
+	if(hovering_settings && !ImGui::IsPopupOpen("settings_popup")) {
+		ImGui::BeginTooltip();
+		ImGui::Text("Settings");
+		ImGui::EndTooltip();
+	}
+	
+	if(show_settings_menu) ImGui::OpenPopup("settings_popup");
+	static bool show_duration_modal = false;
+	if(ImGui::BeginPopup("settings_popup")) {		
+		ImGui::MenuItem("About Linebaby");
+		ImGui::MenuItem("Help");
+		ImGui::Separator();
+		
+		ImGui::MenuItem("Open...");
+		ImGui::MenuItem("Save...");
+		ImGui::MenuItem("Export...");
+		ImGui::Separator();
+		
+		if(ImGui::MenuItem("Set Artboard")) {
+			input_mode = INPUT_ARTBOARD;
+			lb_strokes_artboard_set = false;
+			lb_strokes_artboard_set_idx = 0;
+			guiState.showFileSettingsPanel = false;
+		}
+		if(ImGui::MenuItem("Set Timeline Duration...")) {
+			show_duration_modal = true;
+		}
+		
+		ImGui::Separator();
+		ImGui::MenuItem("Quit");
+		ImGui::EndPopup();
+	}
+	
+	if(show_duration_modal) ImGui::OpenPopup("Duration");
+	if(ImGui::BeginPopupModal("Duration", &show_duration_modal, ImGuiWindowFlags_AlwaysAutoResize)) {
+		ImGui::DragFloat("##timeline_duration", &lb_strokes_timelineDuration, 1.0f, 0.0f, 60.0f, "%.2f seconds");
+		if(ImGui::Button("OK")) show_duration_modal = false;
+		ImGui::EndPopup();
+	}
+}
+
+static void drawOverlays() {
+	if(lb_strokes_artboard_set_idx == 0) {
+		ImGui::BeginTooltip();
+		ImGui::Text("Click to set first corner");
+		ImGui::EndTooltip();
+	} else if(lb_strokes_artboard_set_idx == 1) {
+		ImGui::BeginTooltip();
+		ImVec2 mouse = ImGui::GetMousePos();
+		ImGui::Text("%d x %d", (int)abs(lb_strokes_artboard[0].x - mouse.x), (int)abs(lb_strokes_artboard[0].y - mouse.y));
+		ImGui::EndTooltip();
+	}
 }
 
 static void drawStrokeProperties() {
-	if(!lb_strokes_selected) return;
+	if(!lb_strokes_selected || input_mode == INPUT_ARTBOARD) return;
 
 	ImGuiIO& io = ImGui::GetIO();
-	ImGuiStyle& style = ImGui::GetStyle();
-	ImColor bg = style.Colors[ImGuiCol_WindowBg];
-	bg.Value.w = 0.2f;
-	ImGui::PushStyleColor(ImGuiCol_WindowBg, bg.Value);
 	ImGui::SetNextWindowSize(ImVec2(200, 300));
 	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 200 - 5, 5));
 	ImGui::Begin("Stroke Properties", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
@@ -535,7 +604,6 @@ static void drawStrokeProperties() {
 	*/
 	
 	ImGui::End();
-	ImGui::PopStyleColor();
 }
 
 EXTERN_C void lb_ui_render(int windowWidth, int windowHeight, int framebufferWidth, int framebufferHeight, double dt) {
@@ -566,12 +634,17 @@ EXTERN_C void lb_ui_render(int windowWidth, int windowHeight, int framebufferWid
 	// Start the frame. This call will update the io.WantCaptureMouse, io.WantCaptureKeyboard flag that you can use to dispatch inputs (or not) to your application.
 	ImGui::NewFrame();
 	
+	#ifdef DEBUG
 	if(guiState.showDemoPanel) ImGui::ShowDemoWindow(&guiState.showDemoPanel);
+	#endif
+	
 	drawTools();
 	drawTimeline();
+	drawOverlays();
 	drawStrokeProperties();
 
 	ImGui::Render();
+	renderImGuiDrawLists(ImGui::GetDrawData());
 }
 
 EXTERN_C bool lb_ui_isDrawingCursor() {

@@ -7,7 +7,8 @@
 
 extern enum lb_input_mode {
 	INPUT_SELECT,
-	INPUT_DRAW
+	INPUT_DRAW,
+	INPUT_ARTBOARD
 } input_mode;
 
 enum lb_animate_method {
@@ -57,6 +58,9 @@ extern float lb_strokes_timelineDuration;
 extern float lb_strokes_timelinePosition;
 extern bool lb_strokes_draggingPlayhead;
 extern struct lb_stroke* lb_strokes_selected;
+extern bool lb_strokes_artboard_set;
+extern int lb_strokes_artboard_set_idx;
+extern vec2 lb_strokes_artboard[2];
 
 float lb_strokes_setTimelinePosition(float pos);
 void lb_strokes_updateTimeline(float dt);
