@@ -465,13 +465,29 @@ static void drawTools() {
 		ImGui::EndTooltip();
 	}
 	
+	if(ImGui::IsMouseHoveringWindow()) {
+		ImGui::BeginTooltip();
+		switch(input_mode) {
+			case INPUT_DRAW:
+				ImGui::Text("Draw");
+				break;
+			case INPUT_SELECT:
+				ImGui::Text("Select");
+				break;
+			case INPUT_ARTBOARD:
+				ImGui::Text("Artboard");
+				break;
+		}
+		ImGui::EndTooltip();
+	}
+	
 	ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), *uv0, *uv1, ImVec4(1,1,1,1));
 	
 	ImGui::End();	
 	
 	static bool hovering_settings = false;
-	bool show_settings_menu = false;
-	
+	static bool show_settings_menu = false;
+
 	ImGui::PushStyleColor(ImGuiCol_Border, ImGui::GetColorU32(ImVec4(0,0,0,0)));
 	ImGui::SetNextWindowSize(ImVec2(32, 32));
 	ImGui::SetNextWindowBgAlpha(0);
@@ -502,12 +518,14 @@ static void drawTools() {
 	if(show_settings_menu) ImGui::OpenPopup("settings_popup");
 	if(ImGui::BeginPopup("settings_popup")) {
 		show_settings_menu = false;
+
 		ImGui::MenuItem("About Linebaby");
 		ImGui::MenuItem("Help");
 		ImGui::Separator();
 		
 		if(ImGui::MenuItem("Open...")) show_open_modal = true;
 		if(ImGui::MenuItem("Save...")) show_save_modal = true;
+
 		ImGui::MenuItem("Export...");
 		ImGui::Separator();
 		

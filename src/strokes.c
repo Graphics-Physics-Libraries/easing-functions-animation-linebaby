@@ -839,7 +839,7 @@ void lb_strokes_open(const char* filename) {
 	fread(&lb_strokes_artboard_set, 1, 1, file);
 	fread(&lb_strokes_artboard, 8, 2, file);
 	fread(&data.strokes_len, 4, 1, file);
-	printf("%d\n", data.strokes_len);
+
 	for(size_t i = 0; i < data.strokes_len; i++) {
 		fread(&data.strokes[i].global_start_time, 4, 1, file);
 		fread(&data.strokes[i].full_duration, 4, 1, file);
