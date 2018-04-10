@@ -6,8 +6,10 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 #include <stdio.h>
-
+#include <dirent.h>
+#include <libgen.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 EXTERN_C {
 	#include "gl.h"
@@ -22,6 +24,9 @@ static float scrollAccumulator;
 static void(*glPrepFrameStateFunc)(int, int, int, int);
 static void(*glUploadDataFunc)(uint32_t, const void*, uint32_t, const void*);
 static void(*glDrawElementFunc)(uint32_t, int32_t, int32_t, int32_t, int32_t, int32_t, uint32_t, const void*);
+
+static bool FileModal(bool* open, const char* action, char* selectedPathOut);
+
 
 void lb_ui_windowFocusCallback(bool focused) {
 	windowFocused = focused;
@@ -219,10 +224,6 @@ EXTERN_C void lb_ui_destroy(void(*glDestroy)()) {
 	glDestroy();
 }
 
-static ImVec2 invertY(const ImVec2& v) {
-	return ImVec2(v.x, 1-v.y);
-}
-
 static void drawTimeline() {
 	static const int timeline_height = 18;
 	static const int handle_height = 18;
@@ -249,7 +250,6 @@ static void drawTimeline() {
 	bool mouse_hovering_playhead = ImGui::IsMouseHoveringRect(ImVec2(timeline_min.x + playhead_pos_x - timeline_height/2, timeline_min.y), ImVec2(timeline_min.x + playhead_pos_x + timeline_height/2, timeline_max.y));
 	bool mouse_hovering_timeline = ImGui::IsMouseHoveringRect(timeline_min, timeline_max);
 
-	ImGuiCol playhead_color = (lb_strokes_draggingPlayhead || mouse_hovering_playhead) ? ImGuiCol_ButtonHovered : ImGuiCol_ButtonActive;
 	draw_list->AddTriangleFilled(
 		ImVec2(timeline_min.x + playhead_pos_x, timeline_min.y),
 		ImVec2(timeline_min.x + playhead_pos_x - timeline_height/2, timeline_min.y + timeline_height/2),
@@ -470,13 +470,14 @@ static void drawTools() {
 	ImGui::End();	
 	
 	static bool hovering_settings = false;
-	static bool show_settings_menu = false;
+	bool show_settings_menu = false;
+	
 	ImGui::PushStyleColor(ImGuiCol_Border, ImGui::GetColorU32(ImVec4(0,0,0,0)));
 	ImGui::SetNextWindowSize(ImVec2(32, 32));
 	ImGui::SetNextWindowBgAlpha(0);
 	ImGui::SetNextWindowPos(style.WindowPadding + ImVec2(0, 32));
 	ImGui::Begin("Settings Button", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
-	show_settings_menu = false;
+	
 	ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), settings_uv0, settings_uv1, ImVec4(1,1,1,1));
 		
 	if(ImGui::IsMouseHoveringWindow()) {
@@ -495,15 +496,18 @@ static void drawTools() {
 		ImGui::EndTooltip();
 	}
 	
-	if(show_settings_menu) ImGui::OpenPopup("settings_popup");
 	static bool show_duration_modal = false;
-	if(ImGui::BeginPopup("settings_popup")) {		
+	static bool show_save_modal = false;
+	static bool show_open_modal = false;
+	if(show_settings_menu) ImGui::OpenPopup("settings_popup");
+	if(ImGui::BeginPopup("settings_popup")) {
+		show_settings_menu = false;
 		ImGui::MenuItem("About Linebaby");
 		ImGui::MenuItem("Help");
 		ImGui::Separator();
 		
-		ImGui::MenuItem("Open...");
-		ImGui::MenuItem("Save...");
+		if(ImGui::MenuItem("Open...")) show_open_modal = true;
+		if(ImGui::MenuItem("Save...")) show_save_modal = true;
 		ImGui::MenuItem("Export...");
 		ImGui::Separator();
 		
@@ -520,6 +524,16 @@ static void drawTools() {
 		ImGui::Separator();
 		ImGui::MenuItem("Quit");
 		ImGui::EndPopup();
+	}
+	
+	if(show_open_modal) {
+		char outpath[PATH_MAX];
+		if(FileModal(&show_open_modal, "Open", outpath)) lb_strokes_open(outpath);
+	}
+	
+	if(show_save_modal) {
+		char outpath[PATH_MAX];
+		if(FileModal(&show_save_modal, "Save", outpath)) lb_strokes_save(outpath);
 	}
 	
 	if(show_duration_modal) ImGui::OpenPopup("Duration");
@@ -657,4 +671,134 @@ EXTERN_C bool lb_ui_capturedMouse() {
 
 EXTERN_C bool lb_ui_capturedKeyboard() {
 	return ImGui::GetIO().WantCaptureKeyboard;
+}
+
+// TODO: Save these in ImGui state
+static char* files[256];
+static char* directories[256];
+static char cur_path[PATH_MAX+1];
+static char out_name[256];
+static uint8_t num_files = 0;
+static uint8_t num_directories = 0;
+static int selected_file_idx = -1;
+static DIR* dir;
+static char* initial_start_path;
+
+static void readDirectoryContents(const char* path) {
+	if(dir) closedir(dir);
+	
+	strncpy(cur_path, path, PATH_MAX);
+	num_files = 0;
+	num_directories = 0;
+	selected_file_idx = -1;
+	
+	dir = opendir(path);
+	if (dir == NULL) {
+		fprintf(stderr, "Could not open directory: %s\n", path);
+		return;
+	}
+ 
+	struct dirent* entry;
+	while((entry = readdir(dir)) != NULL) {
+		switch(entry->d_type) {
+			case DT_REG:
+				files[num_files++] = entry->d_name;
+				break;
+			case DT_DIR:
+				if(strncmp(entry->d_name, ".", 2) == 0) break;
+				if(strncmp(entry->d_name, "..", 3) == 0) break;
+				directories[num_directories++] = entry->d_name;
+				break;
+		}
+	}
+	
+	// closedir(dir);
+}
+
+static bool FileList(char* selectedPathOut, char* startPath) {
+	
+	static const ImVec2 dir_icon_uv0 = ImVec2(0.0f, 0.75f);
+	static const ImVec2 dir_icon_uv1 = ImVec2(0.125f, 0.625f);
+	static const ImVec2 file_icon_uv0 = ImVec2(0.125f, 0.75f);
+	static const ImVec2 file_icon_uv1 = ImVec2(0.25f, 0.625f);
+	static const ImVec2 up_icon_uv0 = ImVec2(0.25f, 0.75f);
+	static const ImVec2 up_icon_uv1 = ImVec2(0.375f, 0.625f);
+	
+	if(initial_start_path != startPath) {
+		initial_start_path = startPath;
+		readDirectoryContents(initial_start_path);
+	}
+	
+	if(ImGui::ImageButton((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), up_icon_uv0, up_icon_uv1)) {
+		readDirectoryContents(dirname(cur_path));
+	}
+	
+	ImGui::SameLine();
+	ImGui::Text(cur_path);
+	ImGui::Separator();
+	
+	ImGui::BeginChild("file_list", ImVec2(ImGui::GetWindowContentRegionWidth(), 240), false);
+	
+	for(int i = 0; i < num_directories; i++) {
+		ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), dir_icon_uv0, dir_icon_uv1, ImVec4(1,1,1,1));		
+		ImGui::SameLine();
+		if(ImGui::Selectable(directories[i], false, ImGuiSelectableFlags_DontClosePopups | ImGuiSelectableFlags_SpanAllColumns)) {
+			strncat(cur_path, "/", PATH_MAX+1);
+			strncat(cur_path, directories[i], PATH_MAX+1);
+			readDirectoryContents(cur_path);
+		}
+	}
+	
+	for(int i = 0; i < num_files; i++) {
+		ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), file_icon_uv0, file_icon_uv1, ImVec4(1,1,1,1));		
+		ImGui::SameLine();
+		if(ImGui::Selectable(files[i], selected_file_idx == i, ImGuiSelectableFlags_DontClosePopups | ImGuiSelectableFlags_SpanAllColumns)) {
+			selected_file_idx = i;
+			strncpy(out_name, files[i], 256);
+		}
+	}
+	
+	ImGui::EndChild();
+	
+	// TODO: Close dir when done
+	return false;
+}
+
+static bool FileModal(bool* open, const char* action, char* selectedPathOut) {
+	assert(open);
+	if(!*open) return false;
+	
+	ImGui::OpenPopup(action);
+	bool confirmed_button = false;
+	bool confirmed_enter = false;
+	
+	if(ImGui::IsPopupOpen(action)) ImGui::SetNextWindowSize(ImVec2(250,350));
+	if(ImGui::BeginPopupModal(action, NULL, ImGuiWindowFlags_NoResize)) {
+		// TODO: Don't run every time
+		char startpath[PATH_MAX];
+		getcwd(startpath, PATH_MAX);
+		
+		FileList(selectedPathOut, startpath);
+		confirmed_enter = ImGui::InputText("##filename", out_name, 256, ImGuiInputTextFlags_NoHorizontalScroll | ImGuiInputTextFlags_EnterReturnsTrue);
+		if(ImGui::Button("Cancel")) {
+			*open = false;
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SameLine();
+		confirmed_button = ImGui::Button(action);
+		
+		ImGui::EndPopup();
+	}
+	if(confirmed_button || confirmed_enter) {
+		if(strnlen(out_name, 256) > 0) {
+			ImGui::CloseCurrentPopup();
+			closedir(dir);
+			*open = false;
+			strncpy(selectedPathOut, cur_path, PATH_MAX);
+			strncat(selectedPathOut, "/", PATH_MAX);
+			strncat(selectedPathOut, out_name, PATH_MAX);
+			return true;
+		}
+	}
+	return false;
 }

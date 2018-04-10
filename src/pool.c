@@ -49,6 +49,12 @@ void pool_free(struct pool* p, void* data) {
 	p->poolsUsed--;
 }
 
+void pool_reset(struct pool* p) {
+	assert(p);
+	memset(p->inUse, 0, p->poolCount);
+	p->poolsUsed = 0;
+}
+
 void pool_destroy(struct pool* p) {
 	free(p);
 }

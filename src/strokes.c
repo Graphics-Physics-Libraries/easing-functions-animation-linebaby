@@ -18,10 +18,8 @@
 
 static struct {
 	struct pool* vertices_pool;
-	size_t vertices_len;
-	
 	struct lb_stroke strokes[MAX_STROKES];
-	uint8_t strokes_len;
+	uint32_t strokes_len;
 } data;
 
 
@@ -779,4 +777,97 @@ void lb_strokes_handleKeyUp(int key, int scancode, int mods) {
 			mods_pressed[MOD_ALT] = false;
 			break;
 	}
+}
+
+void lb_strokes_save(const char* filename) {
+	FILE* file = fopen(filename, "wb");
+	if(!file) {
+		fprintf(stderr, "Could not open output file %s\n", filename);
+		return;
+	}
+	
+	fwrite("LINE", 1, 4, file);
+	fwrite(&lb_strokes_timelineDuration, 4, 1, file);
+	fwrite(&lb_strokes_artboard_set, 1, 1, file);
+	fwrite(&lb_strokes_artboard, 8, 2, file);
+	fwrite(&data.strokes_len, 4, 1, file);
+	for(size_t i = 0; i < data.strokes_len; i++) {
+		fwrite(&data.strokes[i].global_start_time, 4, 1, file);
+		fwrite(&data.strokes[i].full_duration, 4, 1, file);
+		fwrite(&data.strokes[i].scale, 4, 1, file);
+		fwrite(&data.strokes[i].color, 4, 4, file);
+		
+		fwrite(&data.strokes[i].enter.animate_method, 4, 1, file);
+		fwrite(&data.strokes[i].enter.easing_method, 4, 1, file);
+		fwrite(&data.strokes[i].enter.duration, 4, 1, file);
+		fwrite(&data.strokes[i].enter.draw_reverse, 1, 1, file);
+		
+		fwrite(&data.strokes[i].exit.animate_method, 4, 1, file);
+		fwrite(&data.strokes[i].exit.easing_method, 4, 1, file);
+		fwrite(&data.strokes[i].exit.duration, 4, 1, file);
+		fwrite(&data.strokes[i].exit.draw_reverse, 1, 1, file);
+		
+		fwrite(&data.strokes[i].vertices_len, 2, 1, file);
+		for(size_t v = 0; v < data.strokes[i].vertices_len; v++) {
+			fwrite(&data.strokes[i].vertices[v], 8, 3, file);
+		}
+	}
+	
+	fclose(file);
+}
+
+void lb_strokes_open(const char* filename) {
+	FILE* file = fopen(filename, "rb");
+	if(!file) {
+		fprintf(stderr, "Could not open file %s\n", filename);
+		return;
+	}
+	
+	// Reset current state
+	data.strokes_len = 0;
+	pool_reset(data.vertices_pool);
+	lb_strokes_selected_vertex = NULL;
+	lb_strokes_selected = NULL;
+	
+	char buf[4];
+	fread(buf, 1, 4, file);
+	if(strncmp(buf, "LINE", 4) != 0) {
+		goto error;
+	}
+	
+	fread(&lb_strokes_timelineDuration, 4, 1, file);
+	fread(&lb_strokes_artboard_set, 1, 1, file);
+	fread(&lb_strokes_artboard, 8, 2, file);
+	fread(&data.strokes_len, 4, 1, file);
+	printf("%d\n", data.strokes_len);
+	for(size_t i = 0; i < data.strokes_len; i++) {
+		fread(&data.strokes[i].global_start_time, 4, 1, file);
+		fread(&data.strokes[i].full_duration, 4, 1, file);
+		fread(&data.strokes[i].scale, 4, 1, file);
+		fread(&data.strokes[i].color, 4, 4, file);
+		
+		fread(&data.strokes[i].enter.animate_method, 4, 1, file);
+		fread(&data.strokes[i].enter.easing_method, 4, 1, file);
+		fread(&data.strokes[i].enter.duration, 4, 1, file);
+		fread(&data.strokes[i].enter.draw_reverse, 1, 1, file);
+		
+		fread(&data.strokes[i].exit.animate_method, 4, 1, file);
+		fread(&data.strokes[i].exit.easing_method, 4, 1, file);
+		fread(&data.strokes[i].exit.duration, 4, 1, file);
+		fread(&data.strokes[i].exit.draw_reverse, 1, 1, file);
+		
+		fread(&data.strokes[i].vertices_len, 2, 1, file);
+		data.strokes[i].vertices = pool_alloc(data.vertices_pool);
+		for(size_t v = 0; v < data.strokes[i].vertices_len; v++) {
+			fread(&data.strokes[i].vertices[v], 8, 3, file);
+		}
+	}
+	
+	fclose(file);
+	return;
+	
+	error:
+		fclose(file);
+		fprintf(stderr, "Invalid or corrupt file format.\n");
+		return;
 }

@@ -224,3 +224,27 @@ GLubyte* loadPNG(const char* name, uint32_t* out_width, uint32_t* out_height, bo
  
  	return out_data;
 }
+
+/*
+void writePNG(const char* filename) {
+	FILE* file = fopen(filename, "wb");
+	if(!file) {
+		fprintf(stderr, "Could not open export file %s\n", filename);
+		return;
+	}
+	
+	png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, (png_voidp)user_error_ptr, user_error_fn, user_warning_fn);
+	if(!png_ptr)
+		return
+	(ERROR);
+	png_infop info_ptr = png_create_info_struct(png_ptr);
+	if
+	(!info_ptr)
+	{
+	png_destroy_write_struct(&png_ptr,
+	(png_infopp)NULL);
+	return
+	(ERROR);
+	}
+}
+*/

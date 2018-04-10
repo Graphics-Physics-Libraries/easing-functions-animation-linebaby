@@ -25,8 +25,8 @@ struct lb_2point_beizer {
 };
 
 struct lb_stroke_transition {
-	enum EasingMethod easing_method;
 	enum lb_animate_method animate_method;
+	enum EasingMethod easing_method;
 	float duration;
 	bool draw_reverse;
 };
@@ -43,13 +43,10 @@ struct lb_stroke {
 	float scale;
 	colorf color;
 	
-	struct lb_2point_beizer thickness_curve;
 	struct lb_stroke_transition enter;
 	struct lb_stroke_transition exit;
 	
-	
 	uint16_t vertices_len;
-	
 };
 
 extern color32 lb_clear_color;
@@ -74,3 +71,6 @@ void lb_strokes_handleKeyRepeat(int key, int scancode, int mods);
 void lb_strokes_handleMouseMove(vec2 point, float time);
 void lb_strokes_handleMouseDown(vec2 point, float time);
 void lb_strokes_handleMouseUp();
+
+void lb_strokes_save(const char* filename);
+void lb_strokes_open(const char* filename);

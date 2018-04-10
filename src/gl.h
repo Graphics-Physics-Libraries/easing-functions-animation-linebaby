@@ -18,3 +18,4 @@ struct shaderProgram* buildProgram(GLuint vertexShader, GLuint fragmentShader, c
 GLenum glCheckError();
 
 GLubyte* loadPNG(const char* name, uint32_t* out_width, uint32_t* out_height, bool* out_has_alpha);
+void writePNG(const char* filename);
