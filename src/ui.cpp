@@ -162,7 +162,7 @@ static struct {
 	bool showFileSettingsPanel = false;
 	
 	#ifdef DEBUG
-	bool showDemoPanel = true;
+	bool showDemoPanel = false;
 	#endif
 } guiState;
 
@@ -465,22 +465,6 @@ static void drawTools() {
 		ImGui::EndTooltip();
 	}
 	
-	if(ImGui::IsMouseHoveringWindow()) {
-		ImGui::BeginTooltip();
-		switch(input_mode) {
-			case INPUT_DRAW:
-				ImGui::Text("Draw");
-				break;
-			case INPUT_SELECT:
-				ImGui::Text("Select");
-				break;
-			case INPUT_ARTBOARD:
-				ImGui::Text("Artboard");
-				break;
-		}
-		ImGui::EndTooltip();
-	}
-	
 	ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), *uv0, *uv1, ImVec4(1,1,1,1));
 	
 	ImGui::End();	
@@ -590,7 +574,8 @@ static void drawStrokeProperties() {
 	
 	ImGui::Text("Thickness");
 	ImGui::SliderFloat("##Thickness", &lb_strokes_selected->scale, 1.0f, 15.0f, "pixels = %.2f");
-	
+	ImGui::Text("Jitter");
+	ImGui::SliderFloat("##Jitter", &lb_strokes_selected->jitter, 0.0f, 0.30f, "%.2f");
 	ImGui::Separator();
 	
 	static const char* animation_mode_combo = "None\0Draw\0Fade\0";

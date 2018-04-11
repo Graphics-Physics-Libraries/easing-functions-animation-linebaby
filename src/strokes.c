@@ -13,6 +13,10 @@
 
 #include <GLFW/glfw3.h>
 
+
+#define RANDOM_SAMPLE_SIZE 1024
+static float random_samples[RANDOM_SAMPLE_SIZE];
+
 #define MAX_STROKES 64
 #define MAX_STROKE_VERTICES 64
 
@@ -21,7 +25,6 @@ static struct {
 	struct lb_stroke strokes[MAX_STROKES];
 	uint32_t strokes_len;
 } data;
-
 
 static struct lb_stroke* create_stroke() {
 	assert(data.strokes_len < MAX_STROKES);
@@ -39,6 +42,16 @@ static void delete_stroke(struct lb_stroke* stroke) {
 	size_t idx = stroke - data.strokes;
 	data.strokes_len--;
 	if(idx) data.strokes[idx] = data.strokes[data.strokes_len]; // swap
+}
+
+static struct lb_stroke* duplicate_stroke(const struct lb_stroke* stroke) {
+	assert(stroke);
+	struct lb_stroke* s = create_stroke();
+	void* vertices_pool = s->vertices;
+	memcpy(s, stroke, sizeof(struct lb_stroke));
+	s->vertices = vertices_pool;
+	memcpy(s->vertices, stroke->vertices, sizeof(struct bezier_point)*stroke->vertices_len);
+	return s;
 }
 
 static struct bezier_point* add_vertex(struct lb_stroke* stroke) {
@@ -199,7 +212,9 @@ void upload_plane() {
 }
 
 void lb_strokes_init() {
-	
+	srand(0);
+	for(size_t i = 0; i < RANDOM_SAMPLE_SIZE; i++) random_samples[i] = rand() / (float)RAND_MAX;
+		
 	// Line shader
 	{
 		static const char* uniformNames[] = {
@@ -394,8 +409,9 @@ void lb_strokes_render() {
 		
 		float total_length_drawn = total_length*percent_drawn;
 		//TODO: Optimize out the double calculation of length, cache the total length if possible
-				
+		
 		// Brush
+		
 		float length_accum = 0.0f;
 		for(size_t vi = 0; vi < data.strokes[i].vertices_len-1; vi++) {
 			v = reverse ? (data.strokes[i].vertices_len-1) - vi : vi;
@@ -426,8 +442,11 @@ void lb_strokes_render() {
 				glUniform1f(brush_shader.uniforms[BRUSH_UNIFORM_ROTATION], reverse ? (float)total_equidistant_points_len - (float)p : (float)p);
 				glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_TRANSLATION], loc.x, loc.y);
 				
-				//vec2 scale = bezier_cubic(data.strokes[i].thickness_curve.a, data.strokes[i].thickness_curve.h1, data.strokes[i].thickness_curve.h2, data.strokes[i].thickness_curve.b, (length_accum / total_length) + (segment_length / total_length) * (p / (float)total_equidistant_points_len));
-				glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_SCALE], data.strokes[i].scale, data.strokes[i].scale);
+				float scale = data.strokes[i].scale;
+				if(data.strokes[i].jitter > 0) {
+					scale += scale * map(random_samples[(reverse ? total_equidistant_points_len-p : p) % RANDOM_SAMPLE_SIZE], 0, 1, -data.strokes[i].jitter, data.strokes[i].jitter);
+				}
+				glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_SCALE], scale, scale);
 		
 				glUniform1i(brush_shader.uniforms[BRUSH_UNIFORM_MASK_TEXTURE], 0);
 				glActiveTexture(GL_TEXTURE0);
@@ -621,7 +640,7 @@ void lb_strokes_handleMouseDown(vec2 point, float time) {
 				lb_strokes_selected = create_stroke();
 				lb_strokes_selected->global_start_time = lb_strokes_timelinePosition - 0.35f;
 				lb_strokes_selected->full_duration = 1.0f;
-				lb_strokes_selected->scale = 8.0f;
+				lb_strokes_selected->scale = 5.25f;
 				lb_strokes_selected->color = (colorf){0,0,0,1};
 				lb_strokes_selected->enter = (struct lb_stroke_transition){
 					.animate_method = ANIMATE_DRAW,
@@ -749,6 +768,11 @@ void lb_strokes_handleKeyDown(int key, int scancode, int mods) {
 				lb_strokes_selected = NULL;
 			}
 			break;
+		case GLFW_KEY_D:
+			if(lb_strokes_selected && mods & GLFW_MOD_CONTROL) {
+				lb_strokes_selected = duplicate_stroke(lb_strokes_selected);
+				lb_strokes_selected_vertex = NULL;
+			}
 		case GLFW_KEY_LEFT_ALT:
 		case GLFW_KEY_RIGHT_ALT:
 			mods_pressed[MOD_ALT] = true;
@@ -786,7 +810,9 @@ void lb_strokes_save(const char* filename) {
 		return;
 	}
 	
+	static const unsigned int version = 0;
 	fwrite("LINE", 1, 4, file);
+	fwrite(&version, 4, 1, file);
 	fwrite(&lb_strokes_timelineDuration, 4, 1, file);
 	fwrite(&lb_strokes_artboard_set, 1, 1, file);
 	fwrite(&lb_strokes_artboard, 8, 2, file);
@@ -796,6 +822,7 @@ void lb_strokes_save(const char* filename) {
 		fwrite(&data.strokes[i].full_duration, 4, 1, file);
 		fwrite(&data.strokes[i].scale, 4, 1, file);
 		fwrite(&data.strokes[i].color, 4, 4, file);
+		fwrite(&data.strokes[i].jitter, 4, 1, file);
 		
 		fwrite(&data.strokes[i].enter.animate_method, 4, 1, file);
 		fwrite(&data.strokes[i].enter.easing_method, 4, 1, file);
@@ -835,6 +862,9 @@ void lb_strokes_open(const char* filename) {
 		goto error;
 	}
 	
+	unsigned int version;
+	fread(&version, 4, 1, file);
+	
 	fread(&lb_strokes_timelineDuration, 4, 1, file);
 	fread(&lb_strokes_artboard_set, 1, 1, file);
 	fread(&lb_strokes_artboard, 8, 2, file);
@@ -845,6 +875,7 @@ void lb_strokes_open(const char* filename) {
 		fread(&data.strokes[i].full_duration, 4, 1, file);
 		fread(&data.strokes[i].scale, 4, 1, file);
 		fread(&data.strokes[i].color, 4, 4, file);
+		fread(&data.strokes[i].jitter, 4, 1, file);
 		
 		fread(&data.strokes[i].enter.animate_method, 4, 1, file);
 		fread(&data.strokes[i].enter.easing_method, 4, 1, file);

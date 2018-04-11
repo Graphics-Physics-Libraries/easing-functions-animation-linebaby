@@ -41,6 +41,7 @@ struct lb_stroke {
 	float global_start_time;
 	float full_duration;
 	float scale;
+	float jitter;
 	colorf color;
 	
 	struct lb_stroke_transition enter;

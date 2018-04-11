@@ -21,6 +21,7 @@
 | `float` | 4 | full duration |
 | `float` | 4 | scale |
 | `vec4` | 4 × 4 | color |
+| `float` | 4 | jitter |
 | `u32` | 4 | enter animation method |
 | `u32` | 4 | enter easing method |
 | `float` | 4 | enter duration |
