@@ -4,21 +4,29 @@
 #include <stddef.h>
 #include <assert.h>
 #include <float.h>
+#include <string.h>
 
 int32_t windowWidth, windowHeight;
 int32_t framebufferWidth, framebufferHeight;
 
-float screen_ortho[4][4] = {
-	{ 2.0f, 0.0f, 0.0f, 0.0f },
-	{ 0.0f, -2.0f, 0.0f, 0.0f },
-	{ 0.0f, 0.0f, -1.0f, 0.0f },
-	{-1.0f, 1.0f, 0.0f, 1.0f },
-};
+float screen_ortho[4][4];
+float crop_ortho[4][4];
 
-float* update_screen_ortho() {
-	screen_ortho[0][0] = 2.0f / (float)windowWidth;
-	screen_ortho[1][1] = -2.0f / (float)windowHeight;
-	return (float*)screen_ortho;
+void update_ortho(mat4 dest, float left, float right, float bottom, float top, float nearVal, float farVal) {
+	float rl, tb, fn;
+	
+	memset(dest, 0, sizeof(mat4));
+	rl = 1.0f / (right  - left);
+	tb = 1.0f / (top    - bottom);
+	fn =-1.0f / (farVal - nearVal);
+
+	dest[0][0] = 2.0f * rl;
+	dest[1][1] = 2.0f * tb;
+	dest[2][2] = 2.0f * fn;
+	dest[3][0] =-(right  + left)    * rl;
+	dest[3][1] =-(top    + bottom)  * tb;
+	dest[3][2] = (farVal + nearVal) * fn;
+	dest[3][3] = 1.0f;
 }
 
 float vec2_dist(const vec2 a, const vec2 b) {

@@ -1,5 +1,1 @@
 build
-__pycache__
-*.blend?
-imgui.ini
-imgui_log.txt

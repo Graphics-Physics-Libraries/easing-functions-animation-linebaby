@@ -8,7 +8,7 @@
 extern enum lb_input_mode {
 	INPUT_SELECT,
 	INPUT_DRAW,
-	INPUT_ARTBOARD
+	INPUT_ARTBOARD,
 } input_mode;
 
 enum lb_animate_method {
@@ -58,20 +58,22 @@ extern bool lb_strokes_draggingPlayhead;
 extern struct lb_stroke* lb_strokes_selected;
 extern bool lb_strokes_artboard_set;
 extern int lb_strokes_artboard_set_idx;
+extern vec2 lb_strokes_pan;
 extern vec2 lb_strokes_artboard[2];
 
 float lb_strokes_setTimelinePosition(float pos);
 void lb_strokes_updateTimeline(float dt);
 
 void lb_strokes_init();
-void lb_strokes_render();
+void lb_strokes_render_app();
+void lb_strokes_render_export(const char* outdir, const uint8_t fps);
 
 void lb_strokes_handleKeyDown(int key, int scancode, int mods);
 void lb_strokes_handleKeyUp(int key, int scancode, int mods);
 void lb_strokes_handleKeyRepeat(int key, int scancode, int mods);
 void lb_strokes_handleMouseMove(vec2 point, float time);
-void lb_strokes_handleMouseDown(vec2 point, float time);
-void lb_strokes_handleMouseUp();
+void lb_strokes_handleMouseDown(int button, vec2 point, float time);
+void lb_strokes_handleMouseUp(int button);
 
 void lb_strokes_save(const char* filename);
 void lb_strokes_open(const char* filename);

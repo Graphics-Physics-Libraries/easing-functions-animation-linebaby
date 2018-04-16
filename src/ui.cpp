@@ -10,11 +10,14 @@
 #include <libgen.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stb_image.h>
 
 EXTERN_C {
 	#include "gl.h"
 	#include "strokes.h"
 	#include "easing.h"
+	
+	#include <GLFW/glfw3.h>
 }
 
 static bool windowFocused;
@@ -201,11 +204,10 @@ EXTERN_C void lb_ui_init(
 	SetStyleColors();
 	
 	// Load custom spritesheet
-	uint32_t ui_sprite_width, ui_sprite_height;
-	bool ui_sprite_alpha;
-	GLubyte* ui_sprite_pix = loadPNG("src/assets/images/ui.png", &ui_sprite_width, &ui_sprite_height, &ui_sprite_alpha);
+	int ui_sprite_width, ui_sprite_height, ui_sprite_channels;
+	stbi_set_flip_vertically_on_load(1);
+	GLubyte* ui_sprite_pix = stbi_load("src/assets/images/ui.png", &ui_sprite_width, &ui_sprite_height, &ui_sprite_channels, 0);
 	assert(ui_sprite_pix);
-	
 	
 	glGenTextures(1, &ui_sprite_texID);
 	glBindTexture(GL_TEXTURE_2D, ui_sprite_texID);
@@ -215,7 +217,7 @@ EXTERN_C void lb_ui_init(
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ui_sprite_width, ui_sprite_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, ui_sprite_pix);
 
-	free(ui_sprite_pix);
+	stbi_image_free(ui_sprite_pix);
 }
 
 EXTERN_C void lb_ui_destroy(void(*glDestroy)()) {
@@ -320,7 +322,11 @@ static void drawTimeline() {
 
 		if(dragging_handle_left && ImGui::IsMouseDragging()) {
 			lb_strokes_selected->global_start_time = ImGui::GetMousePos().x / io.DisplaySize.x * lb_strokes_timelineDuration;
-		
+			if(lb_strokes_selected->global_start_time < 0) {
+				lb_strokes_selected->global_start_time = 0;
+			} else if(lb_strokes_selected->global_start_time + lb_strokes_selected->enter.duration + lb_strokes_selected->full_duration + lb_strokes_selected->exit.duration > lb_strokes_timelineDuration) {
+				lb_strokes_selected->global_start_time = lb_strokes_timelineDuration - lb_strokes_selected->enter.duration - lb_strokes_selected->full_duration - lb_strokes_selected->exit.duration;
+			}
 		} else if(dragging_handle_right && ImGui::IsMouseDragging()) {
 			lb_strokes_selected->full_duration = (ImGui::GetMousePos().x / io.DisplaySize.x * lb_strokes_timelineDuration)
 			- lb_strokes_selected->global_start_time
@@ -328,6 +334,8 @@ static void drawTimeline() {
 			- lb_strokes_selected->exit.duration;
 			if(lb_strokes_selected->full_duration < 0) {
 				lb_strokes_selected->full_duration = 0;
+			} else if(lb_strokes_selected->global_start_time + lb_strokes_selected->enter.duration + lb_strokes_selected->full_duration + lb_strokes_selected->exit.duration > lb_strokes_timelineDuration) {
+				lb_strokes_selected->full_duration = lb_strokes_timelineDuration - lb_strokes_selected->global_start_time - lb_strokes_selected->enter.duration - lb_strokes_selected->exit.duration;
 			}
 		} else if(dragging_handle_enter && ImGui::IsMouseDragging()) {
 			float original_full = lb_strokes_selected->full_duration;
@@ -492,15 +500,17 @@ static void drawTools() {
 	
 	if(hovering_settings && !ImGui::IsPopupOpen("settings_popup")) {
 		ImGui::BeginTooltip();
-		ImGui::Text("Settings");
+		ImGui::Text("Menu");
 		ImGui::EndTooltip();
 	}
 	
 	static bool show_duration_modal = false;
 	static bool show_save_modal = false;
 	static bool show_open_modal = false;
+	static bool show_export_save_modal = false;
+	static char outpath[PATH_MAX];
 	if(show_settings_menu) ImGui::OpenPopup("settings_popup");
-	if(ImGui::BeginPopup("settings_popup")) {
+	if(ImGui::BeginPopup("settings_popup", ImGuiWindowFlags_NoMove)) {
 		show_settings_menu = false;
 
 		ImGui::MenuItem("About Linebaby");
@@ -510,7 +520,7 @@ static void drawTools() {
 		if(ImGui::MenuItem("Open...")) show_open_modal = true;
 		if(ImGui::MenuItem("Save...")) show_save_modal = true;
 
-		ImGui::MenuItem("Export...");
+		if(ImGui::MenuItem("Export...")) show_export_save_modal = true;
 		ImGui::Separator();
 		
 		if(ImGui::MenuItem("Set Artboard")) {
@@ -529,13 +539,17 @@ static void drawTools() {
 	}
 	
 	if(show_open_modal) {
-		char outpath[PATH_MAX];
 		if(FileModal(&show_open_modal, "Open", outpath)) lb_strokes_open(outpath);
 	}
 	
 	if(show_save_modal) {
-		char outpath[PATH_MAX];
 		if(FileModal(&show_save_modal, "Save", outpath)) lb_strokes_save(outpath);
+	}
+	
+	if(show_export_save_modal) {
+		//if(FileModal(&show_export_save_modal, "Export", outpath))
+		lb_strokes_render_export("/home/matt/Downloads", 24);
+		show_export_save_modal = false;
 	}
 	
 	if(show_duration_modal) ImGui::OpenPopup("Duration");
@@ -582,7 +596,9 @@ static void drawStrokeProperties() {
 	static const char* animation_ease_combo = "Linear\0Quadratic In\0Quadratic Out\0Quadratic In/Out\0Cubic In\0Cubic Out\0Cubic In/Out\0Quartic In\0Quartic Out\0Quartic In/Out\0Quintic In\0Quintic Out\0Quintic In/Out\0Sine In\0Sine Out\0Sine In/Out\0Circular In\0Circular Out\0Circular In/Out\0Exponential In\0Exponential Out\0Exponential In/Out\0Elastic In\0Elastic Out\0Elastic In/Out\0Back In\0Back Out\0Back In/Out\0Bounce In\0Bounce Out\0Bounce In/Out\0";
 	
 	ImGui::Text("Entrance Animation");
-	ImGui::Combo("##enter_method", (int*)&lb_strokes_selected->enter.animate_method, animation_mode_combo);
+	if(ImGui::Combo("##enter_method", (int*)&lb_strokes_selected->enter.animate_method, animation_mode_combo)) {
+		if(lb_strokes_selected->enter.animate_method == ANIMATE_NONE) lb_strokes_selected->enter.duration = 0;
+	}
 	if(lb_strokes_selected->enter.animate_method != ANIMATE_NONE) {
 		ImGui::Combo("##enter_ease", (int*)&lb_strokes_selected->enter.easing_method, animation_ease_combo);
 	}
@@ -770,6 +786,11 @@ static bool FileList(char* selectedPathOut, char* startPath) {
 static bool FileModal(bool* open, const char* action, char* selectedPathOut) {
 	assert(open);
 	if(!*open) return false;
+	
+	if(ImGui::IsKeyPressed(GLFW_KEY_ESCAPE)) {
+		*open = false;
+		return false;
+	}
 	
 	ImGui::OpenPopup(action);
 	bool confirmed_button = false;

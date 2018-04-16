@@ -6,13 +6,19 @@
 extern int32_t windowWidth, windowHeight;
 extern int32_t framebufferWidth, framebufferHeight;
 
-extern float screen_ortho[4][4];
-extern float* update_screen_ortho();
-
 // -- Types --
 typedef struct vec2 {
 	float x, y;
 } vec2;
+
+typedef float vec4[4];
+typedef vec4 mat4[4];
+
+extern float screen_ortho[4][4];
+extern float crop_ortho[4][4];
+void update_ortho(mat4 dest, float left, float right, float bottom, float top, float nearVal, float farVal);
+
+float* get_custom_ortho(int width, int height);
 
 float vec2_dist(const vec2 a, const vec2 b);
 float vec2_len(const vec2 a);

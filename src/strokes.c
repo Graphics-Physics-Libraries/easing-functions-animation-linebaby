@@ -14,6 +14,12 @@
 #include <GLFW/glfw3.h>
 
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
+
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 #define RANDOM_SAMPLE_SIZE 1024
 static float random_samples[RANDOM_SAMPLE_SIZE];
 
@@ -78,6 +84,7 @@ bool lb_strokes_draggingPlayhead = false;
 enum lb_input_mode input_mode = INPUT_DRAW;
 bool lb_strokes_artboard_set = false;
 int lb_strokes_artboard_set_idx = -1;
+vec2 lb_strokes_pan;
 vec2 lb_strokes_artboard[2];
 
 float lb_strokes_setTimelinePosition(float pos) {
@@ -109,6 +116,7 @@ static struct shaderProgram line_shader;
 #include "../build/assets/shaders/line.vert.c"
 enum line_shader_uniform {
 	LINE_UNIFORM_PROJECTION = 0,
+	LINE_UNIFORM_PAN,
 	LINE_UNIFORM_COLOR,
 	LINE_UNIFORM_POINT_SIZE
 };
@@ -118,6 +126,7 @@ static struct shaderProgram brush_shader;
 #include "../build/assets/shaders/brush.vert.c"
 enum brush_shader_uniform {
 	BRUSH_UNIFORM_PROJECTION = 0,
+	BRUSH_UNIFORM_PAN,
 	BRUSH_UNIFORM_TRANSLATION,
 	BRUSH_UNIFORM_SCALE,
 	BRUSH_UNIFORM_ROTATION,
@@ -159,9 +168,9 @@ void upload_texture() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, RADIAL_GRADIENT_SIZE, RADIAL_GRADIENT_SIZE, 0, GL_RED, GL_UNSIGNED_BYTE, pix);
 
-	uint32_t brush_width, brush_height;
-	bool brush_alpha;
-	GLubyte* brush_pix = loadPNG("src/assets/images/pencil.png", &brush_width, &brush_height, &brush_alpha);
+	int brush_width, brush_height, brush_channels;
+	stbi_set_flip_vertically_on_load(1);
+	GLubyte* brush_pix = stbi_load("src/assets/images/pencil.png", &brush_width, &brush_height, &brush_channels, 0);
 	assert(brush_pix);
 	
 	glGenTextures(1, &brush_texture);
@@ -172,7 +181,7 @@ void upload_texture() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, brush_width, brush_height, 0, GL_RED, GL_UNSIGNED_BYTE, brush_pix);
 
-	free(brush_pix);
+	stbi_image_free(brush_pix);
 }
 
 static GLuint plane_vao;
@@ -219,6 +228,7 @@ void lb_strokes_init() {
 	{
 		static const char* uniformNames[] = {
 			"projection",
+			"pan",
 			"color",
 			"pointSize"
 		};
@@ -233,6 +243,7 @@ void lb_strokes_init() {
 	{
 		static const char* uniformNames[] = {
 			"projection",
+			"pan",
 			"translation",
 			"scale",
 			"rotation",
@@ -280,7 +291,8 @@ static enum drag_mode {
 	DRAG_NONE,
 	DRAG_ANCHOR,
 	DRAG_HANDLE,
-	DRAG_STROKE
+	DRAG_STROKE,
+	DRAG_PAN,
 } drag_mode = DRAG_NONE;
 
 struct lb_stroke* lb_strokes_selected = NULL;
@@ -326,23 +338,21 @@ static enum draw_state lb_stroke_getDrawStateForTime(const struct lb_stroke* str
 	return NONE;
 }
 
-void lb_strokes_render() {
-	
+void lb_strokes_render_strokes(const float time, const mat4 matrix, const vec2 pan) {
 	glEnable(GL_BLEND);
 	glBlendEquation(GL_FUNC_ADD);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	
 	glDisable(GL_DEPTH_TEST);
-
-	// Draw brushes
+	
 	glUseProgram(brush_shader.program);
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-	glUniformMatrix4fv(brush_shader.uniforms[BRUSH_UNIFORM_PROJECTION], 1, GL_FALSE, (const GLfloat*) screen_ortho);
+	glUniform2f(brush_shader.uniforms[BRUSH_UNIFORM_PAN], pan.x, pan.y);
+	glUniformMatrix4fv(brush_shader.uniforms[BRUSH_UNIFORM_PROJECTION], 1, GL_FALSE, (const GLfloat*) matrix);
 	for(size_t i = 0; i < data.strokes_len; i++) {
 		if(data.strokes[i].vertices_len < 2) continue;
 		
-		enum draw_state state = lb_stroke_getDrawStateForTime(&data.strokes[i], lb_strokes_timelinePosition);
+		enum draw_state state = lb_stroke_getDrawStateForTime(&data.strokes[i], time);
 		bool reverse = false;
 		
 		float percent_drawn;
@@ -355,7 +365,7 @@ void lb_strokes_render() {
 				break;
 			case ENTERING:
 				percent_drawn = EasingFuncs[data.strokes[i].enter.easing_method](map(
-					lb_strokes_timelinePosition,
+					time,
 					data.strokes[i].global_start_time,
 					data.strokes[i].global_start_time + data.strokes[i].enter.duration,
 					0, 1));
@@ -368,7 +378,7 @@ void lb_strokes_render() {
 					data.strokes[i].full_duration;
 				float end = begin + data.strokes[i].exit.duration;
 				percent_drawn = EasingFuncs[data.strokes[i].exit.easing_method](map(
-					lb_strokes_timelinePosition,
+					time,
 					begin, end,
 					1, 0));
 				reverse = data.strokes[i].exit.draw_reverse;
@@ -464,13 +474,86 @@ void lb_strokes_render() {
 			if(percent_segment_drawn < 1.0f) break;
 		}
 	}
+}
+
+static GLuint export_fbo;
+static GLuint export_rbo;
+
+static void render_stroke_export_frame(const float time, const char* outpath, vec2 size, vec2 offset) {
+	
+	glBindFramebuffer(GL_FRAMEBUFFER, export_fbo);
+	glBindRenderbuffer(GL_RENDERBUFFER, export_rbo);
+	glClearColor(0,0,0,0);
+	glClear(GL_COLOR_BUFFER_BIT);
+	
+	
+	update_ortho(crop_ortho, offset.x, offset.x + size.x, offset.y + size.y, offset.y, 0, 1);
+	lb_strokes_render_strokes(time, crop_ortho, (vec2){0,0});
+	
+	glReadBuffer(GL_COLOR_ATTACHMENT0);
+	uint8_t* data = malloc(size.x*size.y*4); //TODO: Malloc less
+	glReadPixels(0, 0, size.x, size.y, GL_RGBA, GL_UNSIGNED_BYTE, data);
+	stbi_flip_vertically_on_write(1);
+	stbi_write_png(outpath, size.x, size.y, 4, data, 0);
+	free(data);
+}
+
+void lb_strokes_render_export(const char* outdir, const uint8_t fps) {
+	const float frametime = 1 / (float)fps;
+	const uint32_t frames = ceil(lb_strokes_timelineDuration / frametime);
+	
+	vec2 size = {
+		.x = fabsf(lb_strokes_artboard[0].x - lb_strokes_artboard[1].x),
+		.y = fabsf(lb_strokes_artboard[0].y - lb_strokes_artboard[1].y)
+	};
+	
+	vec2 offset = {
+		.x = lb_strokes_artboard[0].x < lb_strokes_artboard[1].x ? lb_strokes_artboard[0].x : lb_strokes_artboard[1].x,
+		.y = lb_strokes_artboard[0].y < lb_strokes_artboard[1].y ? lb_strokes_artboard[0].y : lb_strokes_artboard[1].y
+	};
+	
+	glGenFramebuffers(1, &export_fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, export_fbo);
+	glGenRenderbuffers(1, &export_rbo);
+	glBindRenderbuffer(GL_RENDERBUFFER, export_rbo);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, (GLsizei)size.x, (GLsizei)size.y);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, export_rbo);
+	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		fprintf(stderr, "Incomplete framebuffer.\n");
+		return;
+	}
+	glCheckError();
+	
+	glViewport(0, 0, (GLsizei)size.x, (GLsizei)size.y);
+	
+	char out_file[4096];
+	for(uint32_t i = 0; i < frames; i++) {
+		snprintf(out_file, 4096, "%s/line_%04d.png", outdir, i);
+		render_stroke_export_frame(i * frametime, out_file, size, offset);
+	}
+	
+	glDeleteRenderbuffers(1, &export_rbo);
+	glDeleteFramebuffers(1, &export_fbo);
+	
+	lb_strokes_pan = tmp_pan;
+}
+
+void lb_strokes_render_app() {
+	
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+	glViewport(0, 0, (GLsizei)windowWidth, (GLsizei)windowHeight);
+	
+	update_ortho(screen_ortho, 0, windowWidth, windowHeight, 0, 0, 1);
+	lb_strokes_render_strokes(lb_strokes_timelinePosition, screen_ortho, lb_strokes_pan);
 
 	if(lb_strokes_selected && input_mode != INPUT_ARTBOARD) {
 		// Draw lines
 		glUseProgram(line_shader.program);
 		glEnable(GL_PROGRAM_POINT_SIZE);
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
+		glUniform2f(line_shader.uniforms[LINE_UNIFORM_PAN], lb_strokes_pan.x, lb_strokes_pan.y);
+		
 		glUniformMatrix4fv(line_shader.uniforms[LINE_UNIFORM_PROJECTION], 1, GL_FALSE, (const GLfloat*) screen_ortho);
 		glUniform3f(line_shader.uniforms[LINE_UNIFORM_COLOR], 1.0f, 0.0f, 0.0f);
 		glUniform1f(line_shader.uniforms[LINE_UNIFORM_POINT_SIZE], 5.0f);
@@ -536,7 +619,7 @@ void lb_strokes_render() {
 		
 		glUseProgram(line_shader.program);
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
+		glUniform2f(line_shader.uniforms[LINE_UNIFORM_PAN], lb_strokes_pan.x, lb_strokes_pan.y);
 		glUniformMatrix4fv(line_shader.uniforms[LINE_UNIFORM_PROJECTION], 1, GL_FALSE, (const GLfloat*) screen_ortho);
 
 		glBindVertexArray(gl_lines.vao);
@@ -555,136 +638,145 @@ void lb_strokes_render() {
 	}
 }
 
-void lb_strokes_handleMouseDown(vec2 point, float time) {
-	switch(input_mode) {
-		case INPUT_SELECT: {
-			if(!lb_strokes_selected) {
-				for(size_t i = 0; i < data.strokes_len; i++) {
-					for(size_t v = 0; v < data.strokes[i].vertices_len-1; v++) {
-						struct bezier_point* a = &data.strokes[i].vertices[v];
-						struct bezier_point* b = &data.strokes[i].vertices[v+1];
+void lb_strokes_handleMouseDown(int button, vec2 point, float time) {
+	switch(button) {
+		case GLFW_MOUSE_BUTTON_LEFT:
+			switch(input_mode) {
+				case INPUT_SELECT: {
+					if(!lb_strokes_selected) {
+						for(size_t i = 0; i < data.strokes_len; i++) {
+							for(size_t v = 0; v < data.strokes[i].vertices_len-1; v++) {
+								struct bezier_point* a = &data.strokes[i].vertices[v];
+								struct bezier_point* b = &data.strokes[i].vertices[v+1];
+								vec2 closest = bezier_closest_point(a->anchor, a->handles[1], b->handles[0], b->anchor, 20, 3, point);
+								if(vec2_dist(point, closest) <= select_tolerance_dist) {
+									lb_strokes_selected = &data.strokes[i];
+									lb_strokes_selected_vertex = NULL;
+									goto exit;
+								}
+							}
+						}
+						
+						goto exit;
+					}
+					
+					// Check all control points
+					for(size_t i = 0; i < lb_strokes_selected->vertices_len; i++) {
+						if(vec2_dist(point, lb_strokes_selected->vertices[i].anchor) <= select_tolerance_dist) {
+							drag_mode = DRAG_ANCHOR;
+							drag_vec = &lb_strokes_selected->vertices[i].anchor;
+							lb_strokes_selected_vertex = &lb_strokes_selected->vertices[i];
+							break;
+						} else if(vec2_dist(point, lb_strokes_selected->vertices[i].handles[0]) <= select_tolerance_dist) {
+							drag_mode = DRAG_HANDLE;
+							drag_vec = &lb_strokes_selected->vertices[i].handles[0];
+							lb_strokes_selected_vertex = &lb_strokes_selected->vertices[i];
+							drag_handle_idx = 0;
+							break;
+						} else if(vec2_dist(point, lb_strokes_selected->vertices[i].handles[1]) <= select_tolerance_dist) {
+							drag_mode = DRAG_HANDLE;
+							drag_vec = &lb_strokes_selected->vertices[i].handles[1];
+							lb_strokes_selected_vertex = &lb_strokes_selected->vertices[i];
+							drag_handle_idx = 1;
+							break;
+						}
+					}
+					if(drag_mode != DRAG_NONE) break;
+					
+					// Check the stroke itself
+					for(size_t v = 0; v < lb_strokes_selected->vertices_len-1; v++) {
+						struct bezier_point* a = &lb_strokes_selected->vertices[v];
+						struct bezier_point* b = &lb_strokes_selected->vertices[v+1];
 						vec2 closest = bezier_closest_point(a->anchor, a->handles[1], b->handles[0], b->anchor, 20, 3, point);
 						if(vec2_dist(point, closest) <= select_tolerance_dist) {
-							lb_strokes_selected = &data.strokes[i];
-							lb_strokes_selected_vertex = NULL;
+							drag_start = point;
+							drag_mode = DRAG_STROKE;
 							goto exit;
 						}
 					}
-				}
-				
-				goto exit;
-			}
-			
-			// Check all control points
-			for(size_t i = 0; i < lb_strokes_selected->vertices_len; i++) {
-				if(vec2_dist(point, lb_strokes_selected->vertices[i].anchor) <= select_tolerance_dist) {
-					drag_mode = DRAG_ANCHOR;
-					drag_vec = &lb_strokes_selected->vertices[i].anchor;
-					lb_strokes_selected_vertex = &lb_strokes_selected->vertices[i];
+					lb_strokes_selected = NULL; // not close enough to any points, so must be a deselect
+					lb_strokes_selected_vertex = NULL;
+					
 					break;
-				} else if(vec2_dist(point, lb_strokes_selected->vertices[i].handles[0]) <= select_tolerance_dist) {
+					
+					// Search the other strokes			
+					// for(size_t v = 0; v < lb_strokes_selected->vertices_len-1; v++) {
+					// 	struct bezier_point* a = &lb_strokes_selected->vertices[v];
+					// 	struct bezier_point* b = &lb_strokes_selected->vertices[v+1];
+					// 	float len = bezier_estimate_length(a, b);
+					// 	uint16_t segments = hyperbola_min_segments(len);
+					// 	float step = 1.0f / (float)segments;
+					// 	for(float t = 0; t <= 1; t += step) {
+					// 		if(vec2_dist(point, bezier_cubic(a, b, t)) <= select_tolerance_dist) {
+					// 			goto set_drag_stroke;
+					// 		}
+					// 	}
+					// }
+					
+					exit:
+					break;
+				}
+
+				case INPUT_DRAW: {
+					if(!lb_strokes_selected) {
+						// Prevent exceeding maximum strokes
+						if(data.strokes_len >= MAX_STROKES) return;
+						
+						lb_strokes_selected = create_stroke();
+						lb_strokes_selected->global_start_time = lb_strokes_timelinePosition - 0.35f;
+						lb_strokes_selected->full_duration = 1.0f;
+						lb_strokes_selected->scale = 5.25f;
+						lb_strokes_selected->jitter = 0.25f;
+						lb_strokes_selected->color = (colorf){0,0,0,1};
+						lb_strokes_selected->enter = (struct lb_stroke_transition){
+							.animate_method = ANIMATE_DRAW,
+							.duration = 0.35f,
+							.draw_reverse = false,
+						};
+						lb_strokes_selected->exit = (struct lb_stroke_transition){
+							.animate_method = ANIMATE_DRAW,
+							.duration = 0.35f,
+							.draw_reverse = true,
+						};
+					}
+					
+					// Prevent exceeding maximum vertices
+					if(lb_strokes_selected->vertices_len >= MAX_STROKE_VERTICES) return;
+					
+					struct bezier_point* vert = add_vertex(lb_strokes_selected);
+					vert->anchor = point;
+					vert->handles[0] = (vec2){point.x - 20, point.y};
+					vert->handles[1] = (vec2){point.x + 20, point.y};
+
+					// Enable dragging of handle
 					drag_mode = DRAG_HANDLE;
-					drag_vec = &lb_strokes_selected->vertices[i].handles[0];
-					lb_strokes_selected_vertex = &lb_strokes_selected->vertices[i];
+					lb_strokes_selected_vertex = vert;
+					drag_vec = &lb_strokes_selected_vertex->handles[0];
 					drag_handle_idx = 0;
-					break;
-				} else if(vec2_dist(point, lb_strokes_selected->vertices[i].handles[1]) <= select_tolerance_dist) {
-					drag_mode = DRAG_HANDLE;
-					drag_vec = &lb_strokes_selected->vertices[i].handles[1];
-					lb_strokes_selected_vertex = &lb_strokes_selected->vertices[i];
-					drag_handle_idx = 1;
+					
 					break;
 				}
-			}
-			if(drag_mode != DRAG_NONE) break;
-			
-			// Check the stroke itself
-			for(size_t v = 0; v < lb_strokes_selected->vertices_len-1; v++) {
-				struct bezier_point* a = &lb_strokes_selected->vertices[v];
-				struct bezier_point* b = &lb_strokes_selected->vertices[v+1];
-				vec2 closest = bezier_closest_point(a->anchor, a->handles[1], b->handles[0], b->anchor, 20, 3, point);
-				if(vec2_dist(point, closest) <= select_tolerance_dist) {
-					drag_start = point;
-					drag_mode = DRAG_STROKE;
-					goto exit;
-				}
-			}
-			lb_strokes_selected = NULL; // not close enough to any points, so must be a deselect
-			lb_strokes_selected_vertex = NULL;
-			
-			break;
-			
-			// Search the other strokes			
-			// for(size_t v = 0; v < lb_strokes_selected->vertices_len-1; v++) {
-			// 	struct bezier_point* a = &lb_strokes_selected->vertices[v];
-			// 	struct bezier_point* b = &lb_strokes_selected->vertices[v+1];
-			// 	float len = bezier_estimate_length(a, b);
-			// 	uint16_t segments = hyperbola_min_segments(len);
-			// 	float step = 1.0f / (float)segments;
-			// 	for(float t = 0; t <= 1; t += step) {
-			// 		if(vec2_dist(point, bezier_cubic(a, b, t)) <= select_tolerance_dist) {
-			// 			goto set_drag_stroke;
-			// 		}
-			// 	}
-			// }
-			
-			exit:
-			break;
-		}
-
-		case INPUT_DRAW: {
-			if(!lb_strokes_selected) {
-				// Prevent exceeding maximum strokes
-				if(data.strokes_len >= MAX_STROKES) return;
 				
-				lb_strokes_selected = create_stroke();
-				lb_strokes_selected->global_start_time = lb_strokes_timelinePosition - 0.35f;
-				lb_strokes_selected->full_duration = 1.0f;
-				lb_strokes_selected->scale = 5.25f;
-				lb_strokes_selected->color = (colorf){0,0,0,1};
-				lb_strokes_selected->enter = (struct lb_stroke_transition){
-					.animate_method = ANIMATE_DRAW,
-					.duration = 0.35f,
-					.draw_reverse = false,
-				};
-				lb_strokes_selected->exit = (struct lb_stroke_transition){
-					.animate_method = ANIMATE_DRAW,
-					.duration = 0.35f,
-					.draw_reverse = true,
-				};
-			}
-			
-			// Prevent exceeding maximum vertices
-			if(lb_strokes_selected->vertices_len >= MAX_STROKE_VERTICES) return;
-			
-			struct bezier_point* vert = add_vertex(lb_strokes_selected);
-			vert->anchor = point;
-			vert->handles[0] = (vec2){point.x - 20, point.y};
-			vert->handles[1] = (vec2){point.x + 20, point.y};
-
-			// Enable dragging of handle
-			drag_mode = DRAG_HANDLE;
-			lb_strokes_selected_vertex = vert;
-			drag_vec = &lb_strokes_selected_vertex->handles[0];
-			drag_handle_idx = 0;
-			
-			break;
-		}
-		
-		case INPUT_ARTBOARD: {
-			lb_strokes_artboard[lb_strokes_artboard_set_idx] = point;
-			switch(lb_strokes_artboard_set_idx) {
-				case 0:
-					lb_strokes_artboard_set_idx++;
+				case INPUT_ARTBOARD: {
 					lb_strokes_artboard[lb_strokes_artboard_set_idx] = point;
-					break;
-				case 1:
-					lb_strokes_artboard_set = true;
-					lb_strokes_artboard_set_idx = -1;
-					input_mode = INPUT_SELECT;
-					break;
+					switch(lb_strokes_artboard_set_idx) {
+						case 0:
+							lb_strokes_artboard_set_idx++;
+							lb_strokes_artboard[lb_strokes_artboard_set_idx] = point;
+							break;
+						case 1:
+							lb_strokes_artboard_set = true;
+							lb_strokes_artboard_set_idx = -1;
+							input_mode = INPUT_SELECT;
+							break;
+					}
+				}
 			}
-		}
+			break;
+		case GLFW_MOUSE_BUTTON_MIDDLE:
+			drag_start = point;
+			drag_mode = DRAG_PAN;
+			break;
 	}
 }
 
@@ -728,10 +820,15 @@ void lb_strokes_handleMouseMove(vec2 point, float time) {
 			}
 			break;
 		}
+		case DRAG_PAN: {
+			vec2 diff = vec2_sub(point, drag_start);
+			drag_start = vec2_add(drag_start, diff);
+			lb_strokes_pan = vec2_add(lb_strokes_pan, diff);
+		}
 	}
 }
 
-void lb_strokes_handleMouseUp() {
+void lb_strokes_handleMouseUp(int button) {
 	drag_mode = DRAG_NONE;
 }
 
@@ -855,6 +952,7 @@ void lb_strokes_open(const char* filename) {
 	pool_reset(data.vertices_pool);
 	lb_strokes_selected_vertex = NULL;
 	lb_strokes_selected = NULL;
+	lb_strokes_pan = (vec2){0,0};
 	
 	char buf[4];
 	fread(buf, 1, 4, file);

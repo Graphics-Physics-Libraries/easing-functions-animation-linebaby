@@ -16,6 +16,3 @@ GLuint loadShader(const GLenum type, const char* source, const int* sourceLength
 struct shaderProgram* buildProgram(GLuint vertexShader, GLuint fragmentShader, const char** uniformNames, uint8_t numUniforms, struct shaderProgram* out);
 
 GLenum glCheckError();
-
-GLubyte* loadPNG(const char* name, uint32_t* out_width, uint32_t* out_height, bool* out_has_alpha);
-void writePNG(const char* filename);

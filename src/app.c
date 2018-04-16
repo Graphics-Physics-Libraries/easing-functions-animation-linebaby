@@ -118,9 +118,7 @@ void lb_render() {
 	glClearColor(lb_clear_color.r / 255.f, lb_clear_color.g / 255.f, lb_clear_color.b / 255.f, lb_clear_color.a / 255.f);
 	glClear(GL_COLOR_BUFFER_BIT);
 	
-	update_screen_ortho();
-	
-	lb_strokes_render();
+	lb_strokes_render_app();
 	
 	lb_ui_render(windowWidth, windowHeight, framebufferWidth, framebufferHeight, 1.0f/60.0f);
 }
@@ -154,12 +152,12 @@ void handleCallback_mouseButton(GLFWwindow* window, int button, int action, int 
 	lb_ui_mouseButtonCallback(button, action, mods);
 	if(lb_ui_capturedMouse()) return;
 	
-	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+	if(action == GLFW_PRESS) {
 		double x, y;
 		glfwGetCursorPos(window, &x, &y);
-		lb_strokes_handleMouseDown((vec2){x, y}, (float)curTime);
-	} else if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
-		lb_strokes_handleMouseUp();
+		lb_strokes_handleMouseDown(button, (vec2){x, y}, (float)curTime);
+	} else if(action == GLFW_RELEASE) {
+		lb_strokes_handleMouseUp(button);
 	}
 }
 void handleCallback_scroll(GLFWwindow* window, double x, double y) {
