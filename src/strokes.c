@@ -79,11 +79,16 @@ static void delete_vertex(struct lb_stroke* stroke, struct bezier_point* vertex)
 color32 lb_clear_color = (color32){.r = 255, .g = 255, .b = 255, .a = 255};
 bool lb_strokes_playing = false;
 float lb_strokes_timelineDuration = 10.0f;
-float lb_strokes_timelinePosition = 5.0f;
+float lb_strokes_timelinePosition = 1.0f;
 bool lb_strokes_draggingPlayhead = false;
 enum lb_input_mode input_mode = INPUT_DRAW;
+enum lb_drag_mode drag_mode = DRAG_NONE;
 bool lb_strokes_artboard_set = false;
 int lb_strokes_artboard_set_idx = -1;
+bool lb_strokes_export_range_set = false;
+int lb_strokes_export_range_set_idx = -1;
+float lb_strokes_export_range_begin = -1.0f;
+float lb_strokes_export_range_duration = 0.0f;
 vec2 lb_strokes_pan;
 vec2 lb_strokes_artboard[2];
 
@@ -97,10 +102,13 @@ void lb_strokes_updateTimeline(float dt) {
 	if(lb_strokes_timelinePosition > lb_strokes_timelineDuration) lb_strokes_timelinePosition = lb_strokes_timelineDuration;
 	if(lb_strokes_timelinePosition < 0) lb_strokes_timelinePosition = 0;
 	
-	if(!lb_strokes_playing || lb_strokes_draggingPlayhead) return;
+	if(!lb_strokes_playing || lb_strokes_draggingPlayhead || input_mode == INPUT_TRIM) return;
 	lb_strokes_timelinePosition += dt;
 
-	if(lb_strokes_timelinePosition > lb_strokes_timelineDuration) {
+	if(lb_strokes_export_range_set) {
+		if(lb_strokes_timelinePosition < lb_strokes_export_range_begin) lb_strokes_timelinePosition = lb_strokes_export_range_begin;
+		else if(lb_strokes_timelinePosition > lb_strokes_export_range_begin + lb_strokes_export_range_duration) lb_strokes_timelinePosition = lb_strokes_export_range_begin;	
+	} else if(lb_strokes_timelinePosition > lb_strokes_timelineDuration) {
 		lb_strokes_timelinePosition = 0;
 	}
 }
@@ -286,14 +294,6 @@ void lb_strokes_init() {
 	
 	data.vertices_pool = pool_init(sizeof(struct bezier_point) * MAX_STROKE_VERTICES, MAX_STROKES);
 }
-
-static enum drag_mode {
-	DRAG_NONE,
-	DRAG_ANCHOR,
-	DRAG_HANDLE,
-	DRAG_STROKE,
-	DRAG_PAN,
-} drag_mode = DRAG_NONE;
 
 struct lb_stroke* lb_strokes_selected = NULL;
 struct lb_stroke* lb_strokes_selected_tmp = NULL;
@@ -534,8 +534,6 @@ void lb_strokes_render_export(const char* outdir, const uint8_t fps) {
 	
 	glDeleteRenderbuffers(1, &export_rbo);
 	glDeleteFramebuffers(1, &export_fbo);
-	
-	lb_strokes_pan = tmp_pan;
 }
 
 void lb_strokes_render_app() {
@@ -547,7 +545,7 @@ void lb_strokes_render_app() {
 	update_ortho(screen_ortho, 0, windowWidth, windowHeight, 0, 0, 1);
 	lb_strokes_render_strokes(lb_strokes_timelinePosition, screen_ortho, lb_strokes_pan);
 
-	if(lb_strokes_selected && input_mode != INPUT_ARTBOARD) {
+	if(lb_strokes_selected && input_mode != INPUT_ARTBOARD && input_mode != INPUT_TRIM) {
 		// Draw lines
 		glUseProgram(line_shader.program);
 		glEnable(GL_PROGRAM_POINT_SIZE);
@@ -758,11 +756,11 @@ void lb_strokes_handleMouseDown(int button, vec2 point, float time) {
 				}
 				
 				case INPUT_ARTBOARD: {
-					lb_strokes_artboard[lb_strokes_artboard_set_idx] = point;
+					lb_strokes_artboard[lb_strokes_artboard_set_idx] = vec2_sub(point, lb_strokes_pan);
 					switch(lb_strokes_artboard_set_idx) {
 						case 0:
 							lb_strokes_artboard_set_idx++;
-							lb_strokes_artboard[lb_strokes_artboard_set_idx] = point;
+							lb_strokes_artboard[lb_strokes_artboard_set_idx] = vec2_sub(point, lb_strokes_pan);
 							break;
 						case 1:
 							lb_strokes_artboard_set = true;
@@ -770,6 +768,19 @@ void lb_strokes_handleMouseDown(int button, vec2 point, float time) {
 							input_mode = INPUT_SELECT;
 							break;
 					}
+				}
+				
+				case INPUT_TRIM: {
+					if(lb_strokes_export_range_set_idx == 0) {
+						lb_strokes_export_range_begin = lb_strokes_timelinePosition;
+						lb_strokes_export_range_set_idx++;
+					} else if(lb_strokes_export_range_set_idx == 1) {
+						lb_strokes_export_range_set_idx = -1;
+						lb_strokes_export_range_set = true;
+						lb_strokes_export_range_duration = lb_strokes_timelinePosition - lb_strokes_export_range_begin;
+						input_mode = INPUT_SELECT;
+					}
+					break;
 				}
 			}
 			break;
@@ -783,7 +794,11 @@ void lb_strokes_handleMouseDown(int button, vec2 point, float time) {
 void lb_strokes_handleMouseMove(vec2 point, float time) {
 	
 	if(input_mode == INPUT_ARTBOARD && lb_strokes_artboard_set_idx == 1) {
-		lb_strokes_artboard[1] = point;
+		lb_strokes_artboard[1] = vec2_sub(point, lb_strokes_pan);
+		return;
+	} else if(input_mode == INPUT_TRIM) {
+		lb_strokes_timelinePosition = point.x / windowWidth * lb_strokes_timelineDuration;
+		if(lb_strokes_export_range_set_idx == 1 && lb_strokes_timelinePosition < lb_strokes_export_range_begin) lb_strokes_timelinePosition = lb_strokes_export_range_begin; 
 		return;
 	}
 	
@@ -844,6 +859,7 @@ void lb_strokes_handleKeyDown(int key, int scancode, int mods) {
 			lb_strokes_timelinePosition += 0.016f * multiplier;
 			break;
 		case GLFW_KEY_SPACE:
+			if(input_mode == INPUT_TRIM) break;
 			lb_strokes_playing = !lb_strokes_playing;
 			break;
 		case GLFW_KEY_TAB:
@@ -913,6 +929,9 @@ void lb_strokes_save(const char* filename) {
 	fwrite(&lb_strokes_timelineDuration, 4, 1, file);
 	fwrite(&lb_strokes_artboard_set, 1, 1, file);
 	fwrite(&lb_strokes_artboard, 8, 2, file);
+	fwrite(&lb_strokes_export_range_set, 1, 1, file);
+	fwrite(&lb_strokes_export_range_begin, 4, 1, file);
+	fwrite(&lb_strokes_export_range_duration, 4, 1, file);
 	fwrite(&data.strokes_len, 4, 1, file);
 	for(size_t i = 0; i < data.strokes_len; i++) {
 		fwrite(&data.strokes[i].global_start_time, 4, 1, file);
@@ -966,6 +985,9 @@ void lb_strokes_open(const char* filename) {
 	fread(&lb_strokes_timelineDuration, 4, 1, file);
 	fread(&lb_strokes_artboard_set, 1, 1, file);
 	fread(&lb_strokes_artboard, 8, 2, file);
+	fread(&lb_strokes_export_range_set, 1, 1, file);
+	fread(&lb_strokes_export_range_begin, 4, 1, file);
+	fread(&lb_strokes_export_range_duration, 4, 1, file);
 	fread(&data.strokes_len, 4, 1, file);
 
 	for(size_t i = 0; i < data.strokes_len; i++) {

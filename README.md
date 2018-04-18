@@ -10,6 +10,9 @@
 | `bool` | 1 | artboard set |
 | `vec2` | 4 × 2 | artboard area top corner |
 | `vec2` | 4 × 2 | artboard area bottom corner |
+| `bool` | 1 | export range set |
+| `float` | 4 | export range begin |
+| `float` | 4 | export range duration |
 | `u32` | 4 | stroke count |
 | `LB_STROKE` | ? | strokes |
 

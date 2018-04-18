@@ -9,7 +9,16 @@ extern enum lb_input_mode {
 	INPUT_SELECT,
 	INPUT_DRAW,
 	INPUT_ARTBOARD,
+	INPUT_TRIM,
 } input_mode;
+
+extern enum lb_drag_mode {
+	DRAG_NONE,
+	DRAG_ANCHOR,
+	DRAG_HANDLE,
+	DRAG_STROKE,
+	DRAG_PAN,
+} drag_mode;
 
 enum lb_animate_method {
 	ANIMATE_NONE = 0,
@@ -50,6 +59,27 @@ struct lb_stroke {
 	uint16_t vertices_len;
 };
 
+enum lb_export_type {
+	EXPORT_SPRITESHEET = 0,
+	EXPORT_IMAGE_SEQUENCE,
+};
+
+struct lb_export_options {
+	enum lb_export_type type;
+	
+	union {
+		struct {
+			bool include_js_css;
+			bool pack_tightly;
+			bool retina;
+		} spritesheet;
+		
+		struct {
+			bool retina;
+		} image_sequence;
+	};
+};
+
 extern color32 lb_clear_color;
 extern bool lb_strokes_playing;
 extern float lb_strokes_timelineDuration;
@@ -58,6 +88,10 @@ extern bool lb_strokes_draggingPlayhead;
 extern struct lb_stroke* lb_strokes_selected;
 extern bool lb_strokes_artboard_set;
 extern int lb_strokes_artboard_set_idx;
+extern bool lb_strokes_export_range_set;
+extern int lb_strokes_export_range_set_idx;
+extern float lb_strokes_export_range_begin;
+extern float lb_strokes_export_range_duration;
 extern vec2 lb_strokes_pan;
 extern vec2 lb_strokes_artboard[2];
 

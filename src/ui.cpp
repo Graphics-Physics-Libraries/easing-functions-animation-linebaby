@@ -31,6 +31,17 @@ static void(*glDrawElementFunc)(uint32_t, int32_t, int32_t, int32_t, int32_t, in
 static bool FileModal(bool* open, const char* action, char* selectedPathOut);
 
 
+static const ImVec2 dir_icon_uv0 = ImVec2(0.0f, 0.75f);
+static const ImVec2 dir_icon_uv1 = ImVec2(0.125f, 0.625f);
+static const ImVec2 file_icon_uv0 = ImVec2(0.125f, 0.75f);
+static const ImVec2 file_icon_uv1 = ImVec2(0.25f, 0.625f);
+static const ImVec2 up_icon_uv0 = ImVec2(0.25f, 0.75f);
+static const ImVec2 up_icon_uv1 = ImVec2(0.375f, 0.625f);
+static const ImVec2 check_icon_uv0 = ImVec2(0.375f, 0.75f);
+static const ImVec2 check_icon_uv1 = ImVec2(0.5f, 0.625f);
+
+
+
 void lb_ui_windowFocusCallback(bool focused) {
 	windowFocused = focused;
 }
@@ -249,6 +260,17 @@ static void drawTimeline() {
 	draw_list->AddRectFilled(timeline_min, timeline_max, ImGui::GetColorU32(ImGuiCol_WindowBg), 0);
 	// draw_list->AddRectFilled(timeline_min, ImVec2(timeline_min.x + playhead_pos_x, timeline_max.y), ImGui::GetColorU32(ImGuiCol_FrameBg), 0);
 	
+	
+	if(lb_strokes_export_range_set) {
+		draw_list->AddRectFilled(timeline_min, ImVec2(timeline_min.x + (lb_strokes_export_range_begin/lb_strokes_timelineDuration*io.DisplaySize.x), timeline_max.y), ImGui::GetColorU32(ImGuiCol_Separator), 0);
+		draw_list->AddRectFilled(ImVec2(timeline_min.x + (lb_strokes_export_range_begin + lb_strokes_export_range_duration)/lb_strokes_timelineDuration*io.DisplaySize.x, timeline_min.y), timeline_max, ImGui::GetColorU32(ImGuiCol_Separator), 0);
+	} else if(lb_strokes_export_range_set_idx == 0) {
+		draw_list->AddRectFilled(timeline_min, ImVec2(timeline_min.x + (lb_strokes_timelinePosition/lb_strokes_timelineDuration*io.DisplaySize.x), timeline_max.y), ImGui::GetColorU32(ImGuiCol_Separator), 0);
+	} else if(lb_strokes_export_range_set_idx == 1) {
+		draw_list->AddRectFilled(timeline_min, ImVec2(timeline_min.x + (lb_strokes_export_range_begin/lb_strokes_timelineDuration*io.DisplaySize.x), timeline_max.y), ImGui::GetColorU32(ImGuiCol_Separator), 0);
+		draw_list->AddRectFilled(ImVec2(timeline_min.x + lb_strokes_timelinePosition/lb_strokes_timelineDuration*io.DisplaySize.x, timeline_min.y), timeline_max, ImGui::GetColorU32(ImGuiCol_Separator), 0);
+	}
+	
 	bool mouse_hovering_playhead = ImGui::IsMouseHoveringRect(ImVec2(timeline_min.x + playhead_pos_x - timeline_height/2, timeline_min.y), ImVec2(timeline_min.x + playhead_pos_x + timeline_height/2, timeline_max.y));
 	bool mouse_hovering_timeline = ImGui::IsMouseHoveringRect(timeline_min, timeline_max);
 
@@ -397,7 +419,7 @@ static void drawTimeline() {
 	ImGui::PopStyleVar();
 	ImGui::PopStyleVar();
 
-	if(mouse_hovering_playhead || lb_strokes_draggingPlayhead) {
+	if((mouse_hovering_playhead || lb_strokes_draggingPlayhead) && input_mode != INPUT_ARTBOARD && input_mode != INPUT_TRIM) {
 		// TODO: Calculate this better
 		ImGui::SetNextWindowPos(ImVec2(playhead_pos_x - 5.0f - 25.0f, timeline_min.y - style.ItemInnerSpacing.y - 5.0f - 20.0f));
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 5.0f));
@@ -418,8 +440,12 @@ static void drawTools() {
 	static const ImVec2 pencil_uv1 = ImVec2(0.5f, 0.75f);
 	static const ImVec2 artbrd_uv0 = ImVec2(0.5f, 1.0f);
 	static const ImVec2 artbrd_uv1 = ImVec2(0.75f, 0.75f);
-	static const ImVec2 settings_uv0 = ImVec2(0.75f, 1.0f);
-	static const ImVec2 settings_uv1 = ImVec2(1.0f, 0.75f);
+	static const ImVec2 menu_uv0 = ImVec2(0.75f, 1.0f);
+	static const ImVec2 menu_uv1 = ImVec2(1.0f, 0.75f);
+	static const ImVec2 pan_uv0 = ImVec2(0.75f, 0.75f);
+	static const ImVec2 pan_uv1 = ImVec2(1.0f, 0.5f);
+	static const ImVec2 trim_uv0 = ImVec2(0.5f, 0.75f);
+	static const ImVec2 trim_uv1 = ImVec2(0.75f, 0.5f);
 	
 	ImGuiStyle& style = ImGui::GetStyle();
 	
@@ -429,22 +455,31 @@ static void drawTools() {
 	
 	ImVec2 const* uv0;
 	ImVec2 const* uv1;
-	switch(input_mode) {
-		case INPUT_DRAW:
-			uv0 = &pencil_uv0;
-			uv1 = &pencil_uv1;
-			break;
-		case INPUT_SELECT:
-			uv0 = &cursor_uv0;
-			uv1 = &cursor_uv1;
-			break;
-		case INPUT_ARTBOARD:
-			uv0 = &artbrd_uv0;
-			uv1 = &artbrd_uv1;
-			break;
+	if(drag_mode == DRAG_PAN) {
+		uv0 = &pan_uv0;
+		uv1 = &pan_uv1;
+	} else {
+		switch(input_mode) {
+			case INPUT_DRAW:
+				uv0 = &pencil_uv0;
+				uv1 = &pencil_uv1;
+				break;
+			case INPUT_SELECT:
+				uv0 = &cursor_uv0;
+				uv1 = &cursor_uv1;
+				break;
+			case INPUT_ARTBOARD:
+				uv0 = &artbrd_uv0;
+				uv1 = &artbrd_uv1;
+				break;
+			case INPUT_TRIM:
+				uv0 = &trim_uv0;
+				uv1 = &trim_uv1;
+				break;
+		}
 	}
 	
-	if(ImGui::IsMouseClicked(0) && ImGui::IsMouseHoveringWindow()) {
+	if(ImGui::IsMouseClicked(0) && ImGui::IsMouseHoveringWindow() && input_mode != INPUT_ARTBOARD && input_mode != INPUT_TRIM) {
 		switch(input_mode) {
 			case INPUT_DRAW:
 				input_mode = INPUT_SELECT;
@@ -457,17 +492,15 @@ static void drawTools() {
 		}
 	}
 	
-	if(ImGui::IsMouseHoveringWindow()) {
+	if(ImGui::IsMouseHoveringWindow() && input_mode != INPUT_ARTBOARD && input_mode != INPUT_TRIM) {
 		ImGui::BeginTooltip();
+		
 		switch(input_mode) {
 			case INPUT_DRAW:
 				ImGui::Text("Draw");
 				break;
 			case INPUT_SELECT:
 				ImGui::Text("Select");
-				break;
-			case INPUT_ARTBOARD:
-				ImGui::Text("Artboard");
 				break;
 		}
 		ImGui::EndTooltip();
@@ -479,61 +512,50 @@ static void drawTools() {
 	
 	static bool hovering_settings = false;
 	static bool show_settings_menu = false;
-
-	ImGui::PushStyleColor(ImGuiCol_Border, ImGui::GetColorU32(ImVec4(0,0,0,0)));
-	ImGui::SetNextWindowSize(ImVec2(32, 32));
-	ImGui::SetNextWindowBgAlpha(0);
-	ImGui::SetNextWindowPos(style.WindowPadding + ImVec2(0, 32));
-	ImGui::Begin("Settings Button", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 	
-	ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), settings_uv0, settings_uv1, ImVec4(1,1,1,1));
+	
+	if(input_mode != INPUT_ARTBOARD && input_mode != INPUT_TRIM) {
+		ImGui::PushStyleColor(ImGuiCol_Border, ImGui::GetColorU32(ImVec4(0,0,0,0)));
+		ImGui::SetNextWindowSize(ImVec2(32, 32));
+		ImGui::SetNextWindowBgAlpha(0);
+		ImGui::SetNextWindowPos(style.WindowPadding + ImVec2(0, 32));
+		ImGui::Begin("Settings Button", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 		
-	if(ImGui::IsMouseHoveringWindow()) {
-		hovering_settings = true;
-		if(ImGui::IsMouseClicked(0)) show_settings_menu = true;
-	} else {
-		hovering_settings = false;
+		ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), menu_uv0, menu_uv1, ImVec4(1,1,1,1));
+			
+		if(ImGui::IsMouseHoveringWindow()) {
+			hovering_settings = true;
+			if(ImGui::IsMouseClicked(0)) show_settings_menu = true;
+		} else {
+			hovering_settings = false;
+		}
+		
+		ImGui::End();
+		ImGui::PopStyleColor();
+		
+		if(hovering_settings && !ImGui::IsPopupOpen("settings_popup")) {
+			ImGui::BeginTooltip();
+			ImGui::Text("Menu");
+			ImGui::EndTooltip();
+		}
 	}
 	
-	ImGui::End();
-	ImGui::PopStyleColor();
-	
-	if(hovering_settings && !ImGui::IsPopupOpen("settings_popup")) {
-		ImGui::BeginTooltip();
-		ImGui::Text("Menu");
-		ImGui::EndTooltip();
-	}
-	
-	static bool show_duration_modal = false;
 	static bool show_save_modal = false;
 	static bool show_open_modal = false;
-	static bool show_export_save_modal = false;
+	static bool show_export_modal = false;
 	static char outpath[PATH_MAX];
 	if(show_settings_menu) ImGui::OpenPopup("settings_popup");
 	if(ImGui::BeginPopup("settings_popup", ImGuiWindowFlags_NoMove)) {
 		show_settings_menu = false;
-
-		ImGui::MenuItem("About Linebaby");
-		ImGui::MenuItem("Help");
-		ImGui::Separator();
 		
 		if(ImGui::MenuItem("Open...")) show_open_modal = true;
 		if(ImGui::MenuItem("Save...")) show_save_modal = true;
-
-		if(ImGui::MenuItem("Export...")) show_export_save_modal = true;
+		if(ImGui::MenuItem("Export...")) show_export_modal = true;
 		ImGui::Separator();
 		
-		if(ImGui::MenuItem("Set Artboard")) {
-			input_mode = INPUT_ARTBOARD;
-			lb_strokes_artboard_set = false;
-			lb_strokes_artboard_set_idx = 0;
-			guiState.showFileSettingsPanel = false;
-		}
-		if(ImGui::MenuItem("Set Timeline Duration...")) {
-			show_duration_modal = true;
-		}
-		
+		ImGui::MenuItem("About Linebaby");
 		ImGui::Separator();
+		
 		ImGui::MenuItem("Quit");
 		ImGui::EndPopup();
 	}
@@ -546,35 +568,98 @@ static void drawTools() {
 		if(FileModal(&show_save_modal, "Save", outpath)) lb_strokes_save(outpath);
 	}
 	
-	if(show_export_save_modal) {
-		//if(FileModal(&show_export_save_modal, "Export", outpath))
-		lb_strokes_render_export("/home/matt/Downloads", 24);
-		show_export_save_modal = false;
+	if(show_export_modal && !ImGui::IsPopupOpen("Export") && input_mode != INPUT_ARTBOARD && input_mode != INPUT_TRIM) {
+		ImGui::OpenPopup("Export");
+		ImGui::SetNextWindowSize(ImVec2(250, 250));
 	}
 	
-	if(show_duration_modal) ImGui::OpenPopup("Duration");
-	if(ImGui::BeginPopupModal("Duration", &show_duration_modal, ImGuiWindowFlags_AlwaysAutoResize)) {
-		ImGui::DragFloat("##timeline_duration", &lb_strokes_timelineDuration, 1.0f, 0.0f, 60.0f, "%.2f seconds");
-		if(ImGui::Button("OK")) show_duration_modal = false;
+	if(ImGui::BeginPopupModal("Export", &show_export_modal, ImGuiWindowFlags_NoResize)) {
+		ImGui::Text("1.");
+		ImGui::SameLine();
+		if(ImGui::Button("Set Artboard")) {
+			input_mode = INPUT_ARTBOARD;
+			lb_strokes_artboard_set = false;
+			lb_strokes_artboard_set_idx = 0;
+			guiState.showFileSettingsPanel = false;
+			ImGui::CloseCurrentPopup();
+		}
+		if(lb_strokes_artboard_set) {
+			ImGui::SameLine();
+			ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), check_icon_uv0, check_icon_uv1, ImVec4(1,1,1,1));
+		}
+		
+		
+		ImGui::Text("2.");
+		ImGui::SameLine();
+		if(ImGui::Button("Set Range")) {
+			input_mode = INPUT_TRIM;
+			lb_strokes_export_range_set = false;
+			lb_strokes_export_range_set_idx = 0;
+			ImGui::CloseCurrentPopup();
+		}
+		if(lb_strokes_export_range_set) {
+			ImGui::SameLine();
+			ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), check_icon_uv0, check_icon_uv1, ImVec4(1,1,1,1));
+		}
+		
+		ImGui::Separator();
+		
+		static const char* export_types[] = { "Sprite Sheet", "Image Sequence" };
+		static struct lb_export_options export_options;
+		ImGui::Combo("##Export Type", (int*)&export_options.type, export_types, 2);
+		switch(export_options.type) {
+			case EXPORT_SPRITESHEET:
+				
+				break;
+			case EXPORT_IMAGE_SEQUENCE:
+			
+				break;
+		}
+		
+		bool disabled = !lb_strokes_artboard_set || !lb_strokes_export_range_set;
+		if(disabled) {
+			ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+			ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
+		}
+		ImGui::Button("Export");
+		if(disabled) {
+			ImGui::PopItemFlag();
+			ImGui::PopStyleVar();
+		}
+		//if(FileModal(&show_export_modal, "Export", outpath))
+		// lb_strokes_render_export("/home/matt/Downloads", 24);
+		
 		ImGui::EndPopup();
 	}
 }
 
 static void drawOverlays() {
-	if(lb_strokes_artboard_set_idx == 0) {
-		ImGui::BeginTooltip();
-		ImGui::Text("Click to set first corner");
-		ImGui::EndTooltip();
-	} else if(lb_strokes_artboard_set_idx == 1) {
-		ImGui::BeginTooltip();
-		ImVec2 mouse = ImGui::GetMousePos();
-		ImGui::Text("%d x %d", (int)abs(lb_strokes_artboard[0].x - mouse.x), (int)abs(lb_strokes_artboard[0].y - mouse.y));
-		ImGui::EndTooltip();
+	if(input_mode == INPUT_ARTBOARD) {
+		if(lb_strokes_artboard_set_idx == 0) {
+			ImGui::BeginTooltip();
+			ImGui::Text("Click to set first corner");
+			ImGui::EndTooltip();
+		} else if(lb_strokes_artboard_set_idx == 1) {
+			ImGui::BeginTooltip();
+			ImVec2 mouse = ImGui::GetMousePos();
+			ImGui::Text("%d x %d", (int)abs(lb_strokes_artboard[0].x - mouse.x), (int)abs(lb_strokes_artboard[0].y - mouse.y));
+			ImGui::EndTooltip();
+		}
+	} else if(input_mode == INPUT_TRIM) {
+		if(lb_strokes_export_range_set_idx == 0) {
+			ImGui::BeginTooltip();
+			ImGui::Text("Click to set animation start\n%0.2fs", lb_strokes_timelinePosition);
+			ImGui::EndTooltip();
+		} else if(lb_strokes_export_range_set_idx == 1) {
+			ImGui::BeginTooltip();
+			ImGui::Text("Click to set animation end\n%0.2fs", lb_strokes_timelinePosition);
+			ImGui::EndTooltip();
+		}
 	}
 }
 
 static void drawStrokeProperties() {
-	if(!lb_strokes_selected || input_mode == INPUT_ARTBOARD) return;
+	if(!lb_strokes_selected || input_mode == INPUT_ARTBOARD || input_mode == INPUT_TRIM) return;
 
 	ImGuiIO& io = ImGui::GetIO();
 	ImGui::SetNextWindowSize(ImVec2(200, 300));
@@ -734,14 +819,8 @@ static void readDirectoryContents(const char* path) {
 	// closedir(dir);
 }
 
+
 static bool FileList(char* selectedPathOut, char* startPath) {
-	
-	static const ImVec2 dir_icon_uv0 = ImVec2(0.0f, 0.75f);
-	static const ImVec2 dir_icon_uv1 = ImVec2(0.125f, 0.625f);
-	static const ImVec2 file_icon_uv0 = ImVec2(0.125f, 0.75f);
-	static const ImVec2 file_icon_uv1 = ImVec2(0.25f, 0.625f);
-	static const ImVec2 up_icon_uv0 = ImVec2(0.25f, 0.75f);
-	static const ImVec2 up_icon_uv1 = ImVec2(0.375f, 0.625f);
 	
 	if(initial_start_path != startPath) {
 		initial_start_path = startPath;
@@ -759,7 +838,7 @@ static bool FileList(char* selectedPathOut, char* startPath) {
 	ImGui::BeginChild("file_list", ImVec2(ImGui::GetWindowContentRegionWidth(), 240), false);
 	
 	for(int i = 0; i < num_directories; i++) {
-		ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), dir_icon_uv0, dir_icon_uv1, ImVec4(1,1,1,1));		
+		ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), dir_icon_uv0, dir_icon_uv1, ImVec4(1,1,1,1));
 		ImGui::SameLine();
 		if(ImGui::Selectable(directories[i], false, ImGuiSelectableFlags_DontClosePopups | ImGuiSelectableFlags_SpanAllColumns)) {
 			strncat(cur_path, "/", PATH_MAX+1);
@@ -797,7 +876,7 @@ static bool FileModal(bool* open, const char* action, char* selectedPathOut) {
 	bool confirmed_enter = false;
 	
 	if(ImGui::IsPopupOpen(action)) ImGui::SetNextWindowSize(ImVec2(250,350));
-	if(ImGui::BeginPopupModal(action, NULL, ImGuiWindowFlags_NoResize)) {
+	if(ImGui::BeginPopupModal(action, open, ImGuiWindowFlags_NoResize)) {
 		// TODO: Don't run every time
 		char startpath[PATH_MAX];
 		getcwd(startpath, PATH_MAX);
