@@ -17,6 +17,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 
+//TODO: Reduce footprint by removing image formats
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
@@ -89,6 +90,7 @@ bool lb_strokes_export_range_set = false;
 int lb_strokes_export_range_set_idx = -1;
 float lb_strokes_export_range_begin = -1.0f;
 float lb_strokes_export_range_duration = 0.0f;
+float lb_strokes_export_fps = 15.0f;
 vec2 lb_strokes_pan;
 vec2 lb_strokes_artboard[2];
 
@@ -149,6 +151,7 @@ static GLuint brush_texture;
 
 #define RADIAL_GRADIENT_SIZE 64
 
+#include "../build/assets/images/pencil.png.c"
 void upload_texture() {
 
 	static uint8_t pix[RADIAL_GRADIENT_SIZE][RADIAL_GRADIENT_SIZE];
@@ -178,7 +181,7 @@ void upload_texture() {
 
 	int brush_width, brush_height, brush_channels;
 	stbi_set_flip_vertically_on_load(1);
-	GLubyte* brush_pix = stbi_load("src/assets/images/pencil.png", &brush_width, &brush_height, &brush_channels, 0);
+	GLubyte* brush_pix = stbi_load_from_memory(src_assets_images_pencil_png, src_assets_images_pencil_png_len, &brush_width, &brush_height, &brush_channels, 0);
 	assert(brush_pix);
 	
 	glGenTextures(1, &brush_texture);
@@ -479,28 +482,24 @@ void lb_strokes_render_strokes(const float time, const mat4 matrix, const vec2 p
 static GLuint export_fbo;
 static GLuint export_rbo;
 
-static void render_stroke_export_frame(const float time, const char* outpath, vec2 size, vec2 offset) {
+static void render_stroke_export_frame(const float time, uint8_t* data, vec2 size, vec2 offset) {
 	
 	glBindFramebuffer(GL_FRAMEBUFFER, export_fbo);
 	glBindRenderbuffer(GL_RENDERBUFFER, export_rbo);
 	glClearColor(0,0,0,0);
 	glClear(GL_COLOR_BUFFER_BIT);
 	
-	
 	update_ortho(crop_ortho, offset.x, offset.x + size.x, offset.y + size.y, offset.y, 0, 1);
 	lb_strokes_render_strokes(time, crop_ortho, (vec2){0,0});
 	
 	glReadBuffer(GL_COLOR_ATTACHMENT0);
-	uint8_t* data = malloc(size.x*size.y*4); //TODO: Malloc less
 	glReadPixels(0, 0, size.x, size.y, GL_RGBA, GL_UNSIGNED_BYTE, data);
-	stbi_flip_vertically_on_write(1);
-	stbi_write_png(outpath, size.x, size.y, 4, data, 0);
-	free(data);
 }
 
-void lb_strokes_render_export(const char* outdir, const uint8_t fps) {
-	const float frametime = 1 / (float)fps;
-	const uint32_t frames = ceil(lb_strokes_timelineDuration / frametime);
+void lb_strokes_render_export(const char* outdir, const float fps, struct lb_export_options options) {
+	assert(lb_strokes_export_range_set);
+	const float frametime = 1 / fps;
+	const uint32_t frames = ceil(lb_strokes_export_range_duration / frametime);
 	
 	vec2 size = {
 		.x = fabsf(lb_strokes_artboard[0].x - lb_strokes_artboard[1].x),
@@ -526,10 +525,37 @@ void lb_strokes_render_export(const char* outdir, const uint8_t fps) {
 	
 	glViewport(0, 0, (GLsizei)size.x, (GLsizei)size.y);
 	
-	char out_file[4096];
-	for(uint32_t i = 0; i < frames; i++) {
-		snprintf(out_file, 4096, "%s/line_%04d.png", outdir, i);
-		render_stroke_export_frame(i * frametime, out_file, size, offset);
+	char out_file[4096]; // TODO: PATH_MAX
+	
+	switch(options.type) {
+		case EXPORT_IMAGE_SEQUENCE: {
+			uint8_t* data = malloc(size.x*size.y*4);
+			for(uint32_t i = 0; i < frames; i++) {
+				
+				render_stroke_export_frame(lb_strokes_export_range_begin + i * frametime, data, size, offset);
+				
+				snprintf(out_file, 4096, "%s/line_%04d.png", outdir, i);
+				stbi_flip_vertically_on_write(1);
+				stbi_write_png(out_file, size.x, size.y, 4, data, 0);
+			}
+			free(data);
+			break;
+		}
+		case EXPORT_SPRITESHEET: {
+			uint8_t* data = malloc(frames*size.x*size.y*4);
+			uint8_t* cursor = data;
+			for(uint32_t i = 0; i < frames; i++) {
+				render_stroke_export_frame(lb_strokes_export_range_begin + i * frametime, cursor, size, offset);
+				cursor += (int)(size.x*size.y*4);
+			}
+			
+			//snprintf(out_file, 4096, "%s/line.png", outdir);
+			stbi_flip_vertically_on_write(1);
+			stbi_write_png(outdir, size.x, size.y*frames, 4, data, 0);
+			
+			free(data);
+			break;
+		}
 	}
 	
 	glDeleteRenderbuffers(1, &export_rbo);
@@ -932,6 +958,7 @@ void lb_strokes_save(const char* filename) {
 	fwrite(&lb_strokes_export_range_set, 1, 1, file);
 	fwrite(&lb_strokes_export_range_begin, 4, 1, file);
 	fwrite(&lb_strokes_export_range_duration, 4, 1, file);
+	fwrite(&lb_strokes_export_fps, 4, 1, file);
 	fwrite(&data.strokes_len, 4, 1, file);
 	for(size_t i = 0; i < data.strokes_len; i++) {
 		fwrite(&data.strokes[i].global_start_time, 4, 1, file);
@@ -988,6 +1015,7 @@ void lb_strokes_open(const char* filename) {
 	fread(&lb_strokes_export_range_set, 1, 1, file);
 	fread(&lb_strokes_export_range_begin, 4, 1, file);
 	fread(&lb_strokes_export_range_duration, 4, 1, file);
+	fread(&lb_strokes_export_fps, 4, 1, file);
 	fread(&data.strokes_len, 4, 1, file);
 
 	for(size_t i = 0; i < data.strokes_len; i++) {

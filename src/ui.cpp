@@ -18,6 +18,8 @@ EXTERN_C {
 	#include "easing.h"
 	
 	#include <GLFW/glfw3.h>
+	
+	#include "../build/assets/images/ui.png.c"
 }
 
 static bool windowFocused;
@@ -28,7 +30,7 @@ static void(*glPrepFrameStateFunc)(int, int, int, int);
 static void(*glUploadDataFunc)(uint32_t, const void*, uint32_t, const void*);
 static void(*glDrawElementFunc)(uint32_t, int32_t, int32_t, int32_t, int32_t, int32_t, uint32_t, const void*);
 
-static bool FileModal(bool* open, const char* action, char* selectedPathOut);
+static bool FileModal(bool* open, const bool directory, const char* action, char* selectedPathOut);
 
 
 static const ImVec2 dir_icon_uv0 = ImVec2(0.0f, 0.75f);
@@ -217,7 +219,7 @@ EXTERN_C void lb_ui_init(
 	// Load custom spritesheet
 	int ui_sprite_width, ui_sprite_height, ui_sprite_channels;
 	stbi_set_flip_vertically_on_load(1);
-	GLubyte* ui_sprite_pix = stbi_load("src/assets/images/ui.png", &ui_sprite_width, &ui_sprite_height, &ui_sprite_channels, 0);
+	GLubyte* ui_sprite_pix = stbi_load_from_memory(src_assets_images_ui_png, src_assets_images_ui_png_len, &ui_sprite_width, &ui_sprite_height, &ui_sprite_channels, 0);
 	assert(ui_sprite_pix);
 	
 	glGenTextures(1, &ui_sprite_texID);
@@ -543,6 +545,10 @@ static void drawTools() {
 	static bool show_save_modal = false;
 	static bool show_open_modal = false;
 	static bool show_export_modal = false;
+	static bool show_export_file_modal = false;
+	
+	static struct lb_export_options export_options;
+	
 	static char outpath[PATH_MAX];
 	if(show_settings_menu) ImGui::OpenPopup("settings_popup");
 	if(ImGui::BeginPopup("settings_popup", ImGuiWindowFlags_NoMove)) {
@@ -561,19 +567,19 @@ static void drawTools() {
 	}
 	
 	if(show_open_modal) {
-		if(FileModal(&show_open_modal, "Open", outpath)) lb_strokes_open(outpath);
+		if(FileModal(&show_open_modal, false, "Open", outpath)) lb_strokes_open(outpath);
 	}
 	
 	if(show_save_modal) {
-		if(FileModal(&show_save_modal, "Save", outpath)) lb_strokes_save(outpath);
+		if(FileModal(&show_save_modal, false, "Save", outpath)) lb_strokes_save(outpath);
 	}
+	
 	
 	if(show_export_modal && !ImGui::IsPopupOpen("Export") && input_mode != INPUT_ARTBOARD && input_mode != INPUT_TRIM) {
 		ImGui::OpenPopup("Export");
-		ImGui::SetNextWindowSize(ImVec2(250, 250));
 	}
 	
-	if(ImGui::BeginPopupModal("Export", &show_export_modal, ImGuiWindowFlags_NoResize)) {
+	if(ImGui::BeginPopupModal("Export", &show_export_modal, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize)) {
 		ImGui::Text("1.");
 		ImGui::SameLine();
 		if(ImGui::Button("Set Artboard")) {
@@ -586,8 +592,9 @@ static void drawTools() {
 		if(lb_strokes_artboard_set) {
 			ImGui::SameLine();
 			ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), check_icon_uv0, check_icon_uv1, ImVec4(1,1,1,1));
+			ImGui::SameLine();
+			ImGui::Text("%0.0f x %0.0f", fabsf(lb_strokes_artboard[0].x - lb_strokes_artboard[1].x), fabsf(lb_strokes_artboard[0].y - lb_strokes_artboard[1].y));
 		}
-		
 		
 		ImGui::Text("2.");
 		ImGui::SameLine();
@@ -600,34 +607,65 @@ static void drawTools() {
 		if(lb_strokes_export_range_set) {
 			ImGui::SameLine();
 			ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), check_icon_uv0, check_icon_uv1, ImVec4(1,1,1,1));
+			ImGui::SameLine();
+			ImGui::Text("%0.2fs", lb_strokes_export_range_duration);
+		}
+		
+		ImGui::Text("3.");
+		ImGui::SameLine();
+		ImGui::InputFloat("FPS", &lb_strokes_export_fps, 1.0f, 10.0f, 2);
+		bool fps_valid = lb_strokes_export_fps >= 1.0f;
+		if(fps_valid) {
+			ImGui::SameLine();
+			ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), check_icon_uv0, check_icon_uv1, ImVec4(1,1,1,1));
 		}
 		
 		ImGui::Separator();
 		
 		static const char* export_types[] = { "Sprite Sheet", "Image Sequence" };
-		static struct lb_export_options export_options;
 		ImGui::Combo("##Export Type", (int*)&export_options.type, export_types, 2);
+		
+		uint32_t frames = ceil(lb_strokes_export_range_duration / (1 / lb_strokes_export_fps));
+		if(lb_strokes_export_range_set) {
+			ImGui::Text("%d frames", frames);
+		}
+		
 		switch(export_options.type) {
-			case EXPORT_SPRITESHEET:
-				
+			case EXPORT_SPRITESHEET: {
+				if(fps_valid && lb_strokes_export_range_set && lb_strokes_artboard_set) {
+					ImGui::SameLine();
+					ImGui::Text("(%0.0f x %0.0f sheet)", fabsf(lb_strokes_artboard[0].x - lb_strokes_artboard[1].x), frames * fabsf(lb_strokes_artboard[0].y - lb_strokes_artboard[1].y));
+				}
 				break;
+			}
 			case EXPORT_IMAGE_SEQUENCE:
-			
+				
 				break;
 		}
 		
-		bool disabled = !lb_strokes_artboard_set || !lb_strokes_export_range_set;
+		ImGui::Separator();
+		
+		bool disabled = !lb_strokes_artboard_set || !lb_strokes_export_range_set || !fps_valid;
 		if(disabled) {
 			ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
 			ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
 		}
-		ImGui::Button("Export");
+		
+		if(ImGui::Button("Export")) {
+			show_export_file_modal = true;
+		}
+		
 		if(disabled) {
 			ImGui::PopItemFlag();
 			ImGui::PopStyleVar();
 		}
-		//if(FileModal(&show_export_modal, "Export", outpath))
-		// lb_strokes_render_export("/home/matt/Downloads", 24);
+		
+		if(show_export_file_modal) {
+			if(FileModal(&show_export_file_modal, export_options.type == EXPORT_IMAGE_SEQUENCE, "Export##file_selector", outpath)) {
+				lb_strokes_render_export(outpath, lb_strokes_export_fps, export_options);
+				ImGui::CloseCurrentPopup();
+			}
+		}
 		
 		ImGui::EndPopup();
 	}
@@ -786,7 +824,7 @@ static uint8_t num_files = 0;
 static uint8_t num_directories = 0;
 static int selected_file_idx = -1;
 static DIR* dir;
-static char* initial_start_path;
+static char* initial_start_path = NULL;
 
 static void readDirectoryContents(const char* path) {
 	if(dir) closedir(dir);
@@ -815,12 +853,10 @@ static void readDirectoryContents(const char* path) {
 				break;
 		}
 	}
-	
-	// closedir(dir);
 }
 
 
-static bool FileList(char* selectedPathOut, char* startPath) {
+static bool FileList(char* selectedPathOut, char* startPath, const bool directoriesOnly) {
 	
 	if(initial_start_path != startPath) {
 		initial_start_path = startPath;
@@ -847,6 +883,11 @@ static bool FileList(char* selectedPathOut, char* startPath) {
 		}
 	}
 	
+	// Files
+	if(directoriesOnly) {
+		ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+		ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
+	}
 	for(int i = 0; i < num_files; i++) {
 		ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), file_icon_uv0, file_icon_uv1, ImVec4(1,1,1,1));		
 		ImGui::SameLine();
@@ -855,53 +896,76 @@ static bool FileList(char* selectedPathOut, char* startPath) {
 			strncpy(out_name, files[i], 256);
 		}
 	}
+	if(directoriesOnly) {
+		ImGui::PopItemFlag();
+		ImGui::PopStyleVar();
+	}
 	
 	ImGui::EndChild();
 	
-	// TODO: Close dir when done
 	return false;
 }
 
-static bool FileModal(bool* open, const char* action, char* selectedPathOut) {
+static bool FileModal(bool* open, const bool directory, const char* action, char* selectedPathOut) {
 	assert(open);
 	if(!*open) return false;
-	
+
 	if(ImGui::IsKeyPressed(GLFW_KEY_ESCAPE)) {
 		*open = false;
 		return false;
 	}
 	
-	ImGui::OpenPopup(action);
+	if(!ImGui::IsPopupOpen(action)) ImGui::OpenPopup(action);
 	bool confirmed_button = false;
 	bool confirmed_enter = false;
+	bool path_valid = false;
 	
-	if(ImGui::IsPopupOpen(action)) ImGui::SetNextWindowSize(ImVec2(250,350));
+	ImGui::SetNextWindowSize(ImVec2(250,350));
 	if(ImGui::BeginPopupModal(action, open, ImGuiWindowFlags_NoResize)) {
 		// TODO: Don't run every time
 		char startpath[PATH_MAX];
 		getcwd(startpath, PATH_MAX);
 		
-		FileList(selectedPathOut, startpath);
-		confirmed_enter = ImGui::InputText("##filename", out_name, 256, ImGuiInputTextFlags_NoHorizontalScroll | ImGuiInputTextFlags_EnterReturnsTrue);
+		FileList(selectedPathOut, startpath, directory);
+		if(!directory) confirmed_enter = ImGui::InputText("##filename", out_name, 256, ImGuiInputTextFlags_NoHorizontalScroll | ImGuiInputTextFlags_EnterReturnsTrue);
+		
 		if(ImGui::Button("Cancel")) {
+			closedir(dir);
+			dir = NULL;
+			initial_start_path = NULL;
 			*open = false;
 			ImGui::CloseCurrentPopup();
+		}
+		
+		path_valid = directory || strnlen(out_name, 256) > 0;
+		if(!path_valid) {
+			ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+			ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
 		}
 		ImGui::SameLine();
 		confirmed_button = ImGui::Button(action);
+		if(!path_valid) {
+			ImGui::PopItemFlag();
+			ImGui::PopStyleVar();
+		}
 		
+		
+		if((confirmed_button || confirmed_enter) && path_valid) ImGui::CloseCurrentPopup();
 		ImGui::EndPopup();
 	}
-	if(confirmed_button || confirmed_enter) {
-		if(strnlen(out_name, 256) > 0) {
-			ImGui::CloseCurrentPopup();
-			closedir(dir);
-			*open = false;
-			strncpy(selectedPathOut, cur_path, PATH_MAX);
+	
+	if((confirmed_button || confirmed_enter) && path_valid) {
+		closedir(dir);
+		dir = NULL;
+		initial_start_path = NULL;
+		*open = false;
+		strncpy(selectedPathOut, cur_path, PATH_MAX);
+		if(!directory) {
 			strncat(selectedPathOut, "/", PATH_MAX);
 			strncat(selectedPathOut, out_name, PATH_MAX);
-			return true;
 		}
+		return true;
 	}
+	
 	return false;
 }

@@ -92,6 +92,7 @@ extern bool lb_strokes_export_range_set;
 extern int lb_strokes_export_range_set_idx;
 extern float lb_strokes_export_range_begin;
 extern float lb_strokes_export_range_duration;
+extern float lb_strokes_export_fps;
 extern vec2 lb_strokes_pan;
 extern vec2 lb_strokes_artboard[2];
 
@@ -100,7 +101,7 @@ void lb_strokes_updateTimeline(float dt);
 
 void lb_strokes_init();
 void lb_strokes_render_app();
-void lb_strokes_render_export(const char* outdir, const uint8_t fps);
+void lb_strokes_render_export(const char* outdir, const float fps, struct lb_export_options options);
 
 void lb_strokes_handleKeyDown(int key, int scancode, int mods);
 void lb_strokes_handleKeyUp(int key, int scancode, int mods);
