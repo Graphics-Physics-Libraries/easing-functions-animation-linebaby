@@ -47,7 +47,7 @@ $(BUILD_DIR)/bin/linebaby: $(LINEBABY_OBJECTS) | $(BUILD_DIR)/vendor
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) $(LDLIBS) -o $@
 
-$(BUILD_DIR)/bin/Linebaby.app: $(BUILD_DIR)/bin/linebaby
+$(BUILD_DIR)/bin/Linebaby.app: $(BUILD_DIR)/bin/linebaby src/misc/macos/*
 	mkdir -p $@/Contents
 	mkdir -p $@/Contents/MacOS
 	mkdir -p $@/Contents/Resources
@@ -72,7 +72,8 @@ $(BUILD_DIR)/vendor: vendor.tar.gz
 	cd $@/glfw-*; mkdir build; cd build; cmake -DCMAKE_INSTALL_PREFIX=$(abspath $(BUILD_DIR)) ..; $(MAKE); $(MAKE) install
 	
 	cd $@/glew-*/build; cmake -DCMAKE_INSTALL_LIBDIR=$(abspath $(BUILD_DIR)/lib) -DCMAKE_INSTALL_PREFIX=$(abspath $(BUILD_DIR)) ./cmake; $(MAKE); $(MAKE) install
-	#rm $(BUILD_DIR)/lib/libGLEW.so # Delete the shared library. TODO: Possible to only build static version of GLEW?
+	rm -f $(BUILD_DIR)/lib/libGLEW*.so # Delete the shared library. TODO: Possible to only build static version of GLEW?
+	rm -f $(BUILD_DIR)/lib/libGLEW*.dylib
 	
 	mkdir -p $(BUILD_DIR)/include/imgui
 	cp -r $@/imgui-*/*.h $(BUILD_DIR)/include/imgui

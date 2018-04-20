@@ -566,7 +566,7 @@ void lb_strokes_render_app() {
 	
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glBindRenderbuffer(GL_RENDERBUFFER, 0);
-	glViewport(0, 0, (GLsizei)windowWidth, (GLsizei)windowHeight);
+	glViewport(0, 0, (GLsizei)framebufferWidth, (GLsizei)framebufferHeight);
 	
 	update_ortho(screen_ortho, 0, windowWidth, windowHeight, 0, 0, 1);
 	lb_strokes_render_strokes(lb_strokes_timelinePosition, screen_ortho, lb_strokes_pan);
@@ -580,7 +580,7 @@ void lb_strokes_render_app() {
 		
 		glUniformMatrix4fv(line_shader.uniforms[LINE_UNIFORM_PROJECTION], 1, GL_FALSE, (const GLfloat*) screen_ortho);
 		glUniform3f(line_shader.uniforms[LINE_UNIFORM_COLOR], 1.0f, 0.0f, 0.0f);
-		glUniform1f(line_shader.uniforms[LINE_UNIFORM_POINT_SIZE], 5.0f);
+		glUniform1f(line_shader.uniforms[LINE_UNIFORM_POINT_SIZE], 5.0f * (framebufferWidth / windowWidth));
 
 		glBindVertexArray(gl_lines.vao);
 		glBindBuffer(GL_ARRAY_BUFFER, gl_lines.vbo);
@@ -617,19 +617,19 @@ void lb_strokes_render_app() {
 			// Indicate the selected vertex
 			if(lb_strokes_selected_vertex) {
 				glUniform3f(line_shader.uniforms[LINE_UNIFORM_COLOR], 1.0f, 0.0f, 1.0f);
-				glUniform1f(line_shader.uniforms[LINE_UNIFORM_POINT_SIZE], 9.0f);
+				glUniform1f(line_shader.uniforms[LINE_UNIFORM_POINT_SIZE], 9.0f * (framebufferWidth / windowWidth));
 				glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2), &lb_strokes_selected_vertex->anchor);
 				glDrawArrays(GL_POINTS, 0, 1);
 			}
 			
 			glUniform3f(line_shader.uniforms[LINE_UNIFORM_COLOR], 1.0f, 0.0f, 0.0f);
-			glUniform1f(line_shader.uniforms[LINE_UNIFORM_POINT_SIZE], 5.0f);
+			glUniform1f(line_shader.uniforms[LINE_UNIFORM_POINT_SIZE], 5.0f * (framebufferWidth / windowWidth));
 
 			glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2) * 3 * lb_strokes_selected->vertices_len, lb_strokes_selected->vertices);
 			glDrawArrays(GL_POINTS, 0, 3 * lb_strokes_selected->vertices_len);
 
 			glUniform3f(line_shader.uniforms[LINE_UNIFORM_COLOR], 1.0f, 1.0f, 1.0f);
-			glUniform1f(line_shader.uniforms[LINE_UNIFORM_POINT_SIZE], 3.0f);
+			glUniform1f(line_shader.uniforms[LINE_UNIFORM_POINT_SIZE], 3.0f * (framebufferWidth / windowWidth));
 			
 			glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec2) * 3 * lb_strokes_selected->vertices_len, lb_strokes_selected->vertices);
 			glDrawArrays(GL_POINTS, 0, 3 * lb_strokes_selected->vertices_len);
