@@ -1,3 +1,5 @@
+UNAME_S := $(shell uname -s)
+
 BUILD_DIR ?= build
 
 CFLAGS += -Wall -Wno-unknown-pragmas
@@ -35,11 +37,24 @@ $(BUILD_DIR)/obj/%.o: src/%.cpp $(LINEBABY_ASSETS_PROCESSED) | $(BUILD_DIR)/vend
 LINEBABY_SOURCES := $(shell find src -type f -name '*.c' -o -name '*.cpp')
 LINEBABY_OBJECTS := $(patsubst src/%.cpp,$(BUILD_DIR)/obj/%.o,$(patsubst src/%.c,$(BUILD_DIR)/obj/%.o,$(LINEBABY_SOURCES)))
 
+ifeq ($(UNAME_S),Darwin)
+	LDLIBS += -framework Cocoa -framework IOKit -framework CoreFoundation -framework CoreVideo -framework OpenGL
+endif
+
 $(BUILD_DIR)/bin/linebaby: LDFLAGS += -L$(BUILD_DIR)/lib
 $(BUILD_DIR)/bin/linebaby: LDLIBS += -lstdc++ -limgui $(shell env PKG_CONFIG_PATH=./build/lib/pkgconfig pkg-config --static --libs-only-l glfw3 glew)
 $(BUILD_DIR)/bin/linebaby: $(LINEBABY_OBJECTS) | $(BUILD_DIR)/vendor
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) $(LDLIBS) -o $@
+
+$(BUILD_DIR)/bin/Linebaby.app: $(BUILD_DIR)/bin/linebaby
+	mkdir -p $@/Contents
+	mkdir -p $@/Contents/MacOS
+	mkdir -p $@/Contents/Resources
+	
+	cp -f src/misc/macos/Info.plist $@/Contents/Info.plist
+	cp -f src/misc/macos/Linebaby.icns $@/Contents/Resources/Linebaby.icns
+	cp -f $(BUILD_DIR)/bin/linebaby $@/Contents/MacOS/linebaby
 
 # --- VENDOR ---
 
@@ -57,7 +72,7 @@ $(BUILD_DIR)/vendor: vendor.tar.gz
 	cd $@/glfw-*; mkdir build; cd build; cmake -DCMAKE_INSTALL_PREFIX=$(abspath $(BUILD_DIR)) ..; $(MAKE); $(MAKE) install
 	
 	cd $@/glew-*/build; cmake -DCMAKE_INSTALL_LIBDIR=$(abspath $(BUILD_DIR)/lib) -DCMAKE_INSTALL_PREFIX=$(abspath $(BUILD_DIR)) ./cmake; $(MAKE); $(MAKE) install
-	rm $(BUILD_DIR)/lib/libGLEW.so # Delete the shared library. TODO: Possible to only build static version of GLEW?
+	#rm $(BUILD_DIR)/lib/libGLEW.so # Delete the shared library. TODO: Possible to only build static version of GLEW?
 	
 	mkdir -p $(BUILD_DIR)/include/imgui
 	cp -r $@/imgui-*/*.h $(BUILD_DIR)/include/imgui

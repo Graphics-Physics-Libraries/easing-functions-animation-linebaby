@@ -253,7 +253,7 @@ static void drawTimeline() {
 	ImGui::SetNextWindowBgAlpha(0);
 	ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, total_height));
 	ImGui::SetNextWindowPos(ImVec2(0, io.DisplaySize.y - total_height));
-	ImGui::Begin("Timeline", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+	ImGui::Begin("Timeline", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 	ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
 	const ImVec2 timeline_min = ImVec2(0, io.DisplaySize.y - timeline_height);
@@ -453,7 +453,7 @@ static void drawTools() {
 	
 	ImGui::SetNextWindowSize(ImVec2(32, 32));
 	ImGui::SetNextWindowPos(style.WindowPadding);
-	ImGui::Begin("Tools", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+	ImGui::Begin("Tools", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 	
 	ImVec2 const* uv0;
 	ImVec2 const* uv1;
@@ -521,7 +521,7 @@ static void drawTools() {
 		ImGui::SetNextWindowSize(ImVec2(32, 32));
 		ImGui::SetNextWindowBgAlpha(0);
 		ImGui::SetNextWindowPos(style.WindowPadding + ImVec2(0, 32));
-		ImGui::Begin("Settings Button", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+		ImGui::Begin("Settings Button", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 		
 		ImGui::Image((void *)(intptr_t)ui_sprite_texID, ImVec2(16,16), menu_uv0, menu_uv1, ImVec4(1,1,1,1));
 			
@@ -702,7 +702,7 @@ static void drawStrokeProperties() {
 	ImGuiIO& io = ImGui::GetIO();
 	ImGui::SetNextWindowSize(ImVec2(200, 300));
 	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 200 - 5, 5));
-	ImGui::Begin("Stroke Properties", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+	ImGui::Begin("Stroke Properties", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 	
 	ImGui::Text("Color");
 	ImGui::ColorEdit4("##Color", (float*)&lb_strokes_selected->color, ImGuiColorEditFlags_RGB | ImGuiColorEditFlags_Uint8);
