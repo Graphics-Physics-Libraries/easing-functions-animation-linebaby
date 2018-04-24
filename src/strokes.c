@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <libgen.h>
+#include <errno.h>
 
 #include "gl.h"
 #include "util.h"
@@ -483,7 +484,7 @@ void lb_strokes_render_strokes(const float time, const mat4 matrix, const vec2 p
 static GLuint export_fbo;
 static GLuint export_rbo;
 
-static void render_stroke_export_frame(const float time, uint8_t* data, vec2 size, vec2 offset) {
+static void render_stroke_export_frame(const float time, uint8_t* data, vec2 size, vec2 framebuffer_size, vec2 offset) {
 	
 	glBindFramebuffer(GL_FRAMEBUFFER, export_fbo);
 	glBindRenderbuffer(GL_RENDERBUFFER, export_rbo);
@@ -494,7 +495,7 @@ static void render_stroke_export_frame(const float time, uint8_t* data, vec2 siz
 	lb_strokes_render_strokes(time, crop_ortho, (vec2){0,0});
 	
 	glReadBuffer(GL_COLOR_ATTACHMENT0);
-	glReadPixels(0, 0, size.x, size.y, GL_RGBA, GL_UNSIGNED_BYTE, data);
+	glReadPixels(0, 0, framebuffer_size.x, framebuffer_size.y, GL_RGBA, GL_UNSIGNED_BYTE, data);
 }
 
 void lb_strokes_render_export(const char* outdir, const float fps, struct lb_export_options options) {
@@ -506,6 +507,11 @@ void lb_strokes_render_export(const char* outdir, const float fps, struct lb_exp
 		.x = fabsf(lb_strokes_artboard[0].x - lb_strokes_artboard[1].x),
 		.y = fabsf(lb_strokes_artboard[0].y - lb_strokes_artboard[1].y)
 	};
+	vec2 framebuffer_size = size;
+	if(options.retina_2x) {
+		framebuffer_size.x *= 2;
+		framebuffer_size.y *= 2;
+	}
 	
 	vec2 offset = {
 		.x = lb_strokes_artboard[0].x < lb_strokes_artboard[1].x ? lb_strokes_artboard[0].x : lb_strokes_artboard[1].x,
@@ -516,7 +522,7 @@ void lb_strokes_render_export(const char* outdir, const float fps, struct lb_exp
 	glBindFramebuffer(GL_FRAMEBUFFER, export_fbo);
 	glGenRenderbuffers(1, &export_rbo);
 	glBindRenderbuffer(GL_RENDERBUFFER, export_rbo);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, (GLsizei)size.x, (GLsizei)size.y);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, (GLsizei)framebuffer_size.x, (GLsizei)framebuffer_size.y);
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, export_rbo);
 	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
 		fprintf(stderr, "Incomplete framebuffer.\n");
@@ -524,40 +530,50 @@ void lb_strokes_render_export(const char* outdir, const float fps, struct lb_exp
 	}
 	glCheckError();
 	
-	glViewport(0, 0, (GLsizei)size.x, (GLsizei)size.y);
+	glViewport(0, 0, (GLsizei)framebuffer_size.x, (GLsizei)framebuffer_size.y);
 	
 	char out_file[4096]; // TODO: PATH_MAX
 	
 	switch(options.type) {
 		case EXPORT_IMAGE_SEQUENCE: {
-			uint8_t* data = malloc(size.x*size.y*4);
+			uint8_t* data = malloc(framebuffer_size.x*framebuffer_size.y*4);
 			for(uint32_t i = 0; i < frames; i++) {
 				
-				render_stroke_export_frame(lb_strokes_export_range_begin + i * frametime, data, size, offset);
+				render_stroke_export_frame(lb_strokes_export_range_begin + i * frametime, data, size, framebuffer_size, offset);
 				
 				snprintf(out_file, 4096, "%s/line_%04d.png", outdir, i);
 				stbi_flip_vertically_on_write(1);
-				stbi_write_png(out_file, size.x, size.y, 4, data, 0);
+				stbi_write_png(out_file, framebuffer_size.x, framebuffer_size.y, 4, data, 0);
 			}
 			free(data);
 			break;
 		}
 		case EXPORT_SPRITESHEET: {
-			uint8_t* data = malloc(frames*size.x*size.y*4);
-			uint8_t* cursor = data + (int)(frames*size.x*size.y*4) - (int)(size.x*size.y*4); // start at the end because they're flipped backwards
+			uint8_t* data = malloc(frames*framebuffer_size.x*framebuffer_size.y*4);
+			uint8_t* cursor = data + (int)(frames*framebuffer_size.x*framebuffer_size.y*4) - (int)(framebuffer_size.x*framebuffer_size.y*4); // start at the end because they're flipped backwards
 			for(uint32_t i = 0; i < frames; i++) {
-				render_stroke_export_frame(lb_strokes_export_range_begin + i * frametime, cursor, size, offset);
-				cursor -= (int)(size.x*size.y*4);
+				render_stroke_export_frame(lb_strokes_export_range_begin + i * frametime, cursor, size, framebuffer_size, offset);
+				cursor -= (int)(framebuffer_size.x*framebuffer_size.y*4);
 			}
 			
-			strncpy(out_file, outdir, 4096);
 			stbi_flip_vertically_on_write(1);
-			stbi_write_png(outdir, size.x, size.y*frames, 4, data, 0);
+			stbi_write_png(outdir, framebuffer_size.x, framebuffer_size.y*frames, 4, data, 0);
 			
 			free(data);
 
 			if(options.spritesheet.include_css) {
-				fprintf(stdout, "<!DOCTYPE html>\n\
+				strncpy(out_file, outdir, 4096);
+				char html_out_file[4096];
+				strncpy(html_out_file, out_file, 4096);
+				strncat(html_out_file, ".html", 4096);
+				
+				FILE* file = fopen(html_out_file, "w");
+				if(!file) {
+					fprintf(stderr, "Could not open output file %s\nError: %s\n", html_out_file, strerror(errno));
+					return;
+				}
+				
+				fprintf(file, "<!DOCTYPE html>\n\
 <html>\n\
 <head>\n\
 	<style>\n\
@@ -570,15 +586,15 @@ void lb_strokes_render_export(const char* outdir, const float fps, struct lb_exp
 			width: %.0fpx;\n\
 			height: %.0fpx;\n\
 			background-image: url(\"%s\");\n\
-			animation: play %.2fs steps(%d);\n\
+			animation: play %.2fs steps(%d) infinite;\n\
 		}\n\
 	</style>\n\
 </head>\n\
 <body>\n\
 	<div id=\"drawing\"></div>\n\
 </body>\n\
-</html>\n", size.y*frames, size.x, size.y, basename(out_file), lb_strokes_export_range_duration, frames);
-			
+</html>\n", framebuffer_size.y*frames, size.x, size.y, basename(out_file), lb_strokes_export_range_duration, frames);
+				fclose(file);
 			}
 			
 			break;

@@ -647,6 +647,8 @@ static void drawTools() {
 				break;
 		}
 		
+		ImGui::Checkbox("@2x retina", &export_options.retina_2x);
+		
 		ImGui::Separator();
 		
 		bool disabled = !lb_strokes_artboard_set || !lb_strokes_export_range_set || !fps_valid;

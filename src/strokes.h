@@ -67,14 +67,14 @@ enum lb_export_type {
 struct lb_export_options {
 	enum lb_export_type type;
 	
+	bool retina_2x;
+	
 	union {
 		struct {
 			bool include_css;
-			bool retina_2x;
 		} spritesheet;
 		
 		struct {
-			bool retina_2x;
 		} image_sequence;
 	};
 };
