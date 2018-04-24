@@ -15,6 +15,10 @@ static void handleGLFWError(int error, const char* description) {
 	fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
 
+void close_app() {
+	glfwSetWindowShouldClose(window, 1);
+}
+
 int main(int argc, char** argv) {
 	
 	glfwSetErrorCallback(handleGLFWError);

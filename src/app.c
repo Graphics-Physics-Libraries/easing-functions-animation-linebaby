@@ -162,6 +162,8 @@ void handleCallback_mouseButton(GLFWwindow* window, int button, int action, int 
 }
 void handleCallback_scroll(GLFWwindow* window, double x, double y) {
 	lb_ui_scrollCallback(x, y);
+	if(lb_ui_capturedMouse()) return;
+	lb_strokes_handleScroll((vec2){x*3,y*3});
 }
 void handleCallback_focus(GLFWwindow* window, int focused) {
 	lb_ui_windowFocusCallback(focused);

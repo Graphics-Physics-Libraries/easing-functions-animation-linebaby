@@ -69,13 +69,12 @@ struct lb_export_options {
 	
 	union {
 		struct {
-			bool include_js_css;
-			bool pack_tightly;
-			bool retina;
+			bool include_css;
+			bool retina_2x;
 		} spritesheet;
 		
 		struct {
-			bool retina;
+			bool retina_2x;
 		} image_sequence;
 	};
 };
@@ -109,6 +108,7 @@ void lb_strokes_handleKeyRepeat(int key, int scancode, int mods);
 void lb_strokes_handleMouseMove(vec2 point, float time);
 void lb_strokes_handleMouseDown(int button, vec2 point, float time);
 void lb_strokes_handleMouseUp(int button);
+void lb_strokes_handleScroll(vec2 dist);
 
 void lb_strokes_save(const char* filename);
 void lb_strokes_open(const char* filename);

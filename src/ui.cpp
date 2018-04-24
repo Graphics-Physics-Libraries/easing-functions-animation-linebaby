@@ -20,6 +20,8 @@ EXTERN_C {
 	#include <GLFW/glfw3.h>
 	
 	#include "../build/assets/images/ui.png.c"
+	
+	void close_app();
 }
 
 static bool windowFocused;
@@ -546,6 +548,7 @@ static void drawTools() {
 	static bool show_open_modal = false;
 	static bool show_export_modal = false;
 	static bool show_export_file_modal = false;
+	static bool show_about_modal = false;
 	
 	static struct lb_export_options export_options;
 	
@@ -559,10 +562,10 @@ static void drawTools() {
 		if(ImGui::MenuItem("Export...")) show_export_modal = true;
 		ImGui::Separator();
 		
-		ImGui::MenuItem("About Linebaby");
+		if(ImGui::MenuItem("About Linebaby")) show_about_modal = true;
 		ImGui::Separator();
 		
-		ImGui::MenuItem("Quit");
+		if(ImGui::MenuItem("Quit")) close_app();
 		ImGui::EndPopup();
 	}
 	
@@ -635,6 +638,7 @@ static void drawTools() {
 				if(fps_valid && lb_strokes_export_range_set && lb_strokes_artboard_set) {
 					ImGui::SameLine();
 					ImGui::Text("(%0.0f x %0.0f sheet)", fabsf(lb_strokes_artboard[0].x - lb_strokes_artboard[1].x), frames * fabsf(lb_strokes_artboard[0].y - lb_strokes_artboard[1].y));
+					ImGui::Checkbox("Include HTML/CSS", &export_options.spritesheet.include_css);
 				}
 				break;
 			}
@@ -669,6 +673,23 @@ static void drawTools() {
 		
 		ImGui::EndPopup();
 	}
+	
+	if(show_about_modal && !ImGui::IsPopupOpen("About")) ImGui::OpenPopup("About");
+	if(ImGui::IsPopupOpen("About")) ImGui::SetNextWindowSize(ImVec2(300, 150));
+	if(ImGui::BeginPopupModal("About", &show_about_modal, ImGuiWindowFlags_NoResize)) {
+		//TODO: ImGui::Image();
+		ImGui::Text("Linebaby");
+		ImGui::Spacing();
+		ImGui::Text("Matt Reyer, 2018");
+		ImGui::Text("lookintothebeam.com");
+		ImGui::Spacing();
+		ImGui::Separator();
+		ImGui::Spacing();
+		ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
+		ImGui::TextWrapped("Licenses for the libraries used to build Linebaby are available in the LICENSES.txt file provided with the program.");
+		ImGui::PopStyleVar();
+		ImGui::EndPopup();
+	}
 }
 
 static void drawOverlays() {
@@ -679,8 +700,7 @@ static void drawOverlays() {
 			ImGui::EndTooltip();
 		} else if(lb_strokes_artboard_set_idx == 1) {
 			ImGui::BeginTooltip();
-			ImVec2 mouse = ImGui::GetMousePos();
-			ImGui::Text("%d x %d", (int)abs(lb_strokes_artboard[0].x - mouse.x), (int)abs(lb_strokes_artboard[0].y - mouse.y));
+			ImGui::Text("%0.0f x %0.0f", fabsf(lb_strokes_artboard[0].x - lb_strokes_artboard[1].x), fabsf(lb_strokes_artboard[0].y - lb_strokes_artboard[1].y));
 			ImGui::EndTooltip();
 		}
 	} else if(input_mode == INPUT_TRIM) {

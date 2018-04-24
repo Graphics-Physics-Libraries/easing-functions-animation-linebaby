@@ -13,6 +13,7 @@
 | `bool` | 1 | export range set |
 | `float` | 4 | export range begin |
 | `float` | 4 | export range duration |
+| `float` | 4 | export fps |
 | `u32` | 4 | stroke count |
 | `LB_STROKE` | ? | strokes |
 
@@ -43,3 +44,9 @@
 | `vec2` | 4 × 2 | anchor |
 | `vec2` | 4 × 2 | handle 1 |
 | `vec2` | 4 × 2 | handle 2 |
+
+
+## GIF
+
+`mogrify -format gif -alpha remove -background white *.png`
+`gifisicle --delay 4 --loopcount forever --output out.gif *.gif`

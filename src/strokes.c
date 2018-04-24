@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <math.h>
+#include <libgen.h>
 
 #include "gl.h"
 #include "util.h"
@@ -48,7 +49,7 @@ static void delete_stroke(struct lb_stroke* stroke) {
 	pool_free(data.vertices_pool, stroke->vertices);
 	size_t idx = stroke - data.strokes;
 	data.strokes_len--;
-	if(idx) data.strokes[idx] = data.strokes[data.strokes_len]; // swap
+	if(idx < data.strokes_len) data.strokes[idx] = data.strokes[data.strokes_len]; // swap
 }
 
 static struct lb_stroke* duplicate_stroke(const struct lb_stroke* stroke) {
@@ -72,7 +73,7 @@ static void delete_vertex(struct lb_stroke* stroke, struct bezier_point* vertex)
 	assert(idx >= 0);
 	assert(idx < MAX_STROKE_VERTICES);
 	stroke->vertices_len--;
-	if(idx) stroke->vertices[idx] = stroke->vertices[stroke->vertices_len]; // swap
+	if(idx < stroke->vertices_len) stroke->vertices[idx] = stroke->vertices[stroke->vertices_len]; // swap
 }
 
 
@@ -543,17 +544,43 @@ void lb_strokes_render_export(const char* outdir, const float fps, struct lb_exp
 		}
 		case EXPORT_SPRITESHEET: {
 			uint8_t* data = malloc(frames*size.x*size.y*4);
-			uint8_t* cursor = data;
+			uint8_t* cursor = data + (int)(frames*size.x*size.y*4) - (int)(size.x*size.y*4); // start at the end because they're flipped backwards
 			for(uint32_t i = 0; i < frames; i++) {
 				render_stroke_export_frame(lb_strokes_export_range_begin + i * frametime, cursor, size, offset);
-				cursor += (int)(size.x*size.y*4);
+				cursor -= (int)(size.x*size.y*4);
 			}
 			
-			//snprintf(out_file, 4096, "%s/line.png", outdir);
+			strncpy(out_file, outdir, 4096);
 			stbi_flip_vertically_on_write(1);
 			stbi_write_png(outdir, size.x, size.y*frames, 4, data, 0);
 			
 			free(data);
+
+			if(options.spritesheet.include_css) {
+				fprintf(stdout, "<!DOCTYPE html>\n\
+<html>\n\
+<head>\n\
+	<style>\n\
+		@keyframes play {\n\
+			from { background-position: 0 0; }\n\
+			to { background-position: 0 -%.0fpx; }\n\
+		}\n\
+		\n\
+		#drawing {\n\
+			width: %.0fpx;\n\
+			height: %.0fpx;\n\
+			background-image: url(\"%s\");\n\
+			animation: play %.2fs steps(%d);\n\
+		}\n\
+	</style>\n\
+</head>\n\
+<body>\n\
+	<div id=\"drawing\"></div>\n\
+</body>\n\
+</html>\n", size.y*frames, size.x, size.y, basename(out_file), lb_strokes_export_range_duration, frames);
+			
+			}
+			
 			break;
 		}
 	}
@@ -663,6 +690,7 @@ void lb_strokes_render_app() {
 }
 
 void lb_strokes_handleMouseDown(int button, vec2 point, float time) {
+	point = vec2_sub(point, lb_strokes_pan);
 	switch(button) {
 		case GLFW_MOUSE_BUTTON_LEFT:
 			switch(input_mode) {
@@ -769,8 +797,8 @@ void lb_strokes_handleMouseDown(int button, vec2 point, float time) {
 					
 					struct bezier_point* vert = add_vertex(lb_strokes_selected);
 					vert->anchor = point;
-					vert->handles[0] = (vec2){point.x - 20, point.y};
-					vert->handles[1] = (vec2){point.x + 20, point.y};
+					vert->handles[0] = (vec2){point.x, point.y};
+					vert->handles[1] = (vec2){point.x, point.y};
 
 					// Enable dragging of handle
 					drag_mode = DRAG_HANDLE;
@@ -782,11 +810,11 @@ void lb_strokes_handleMouseDown(int button, vec2 point, float time) {
 				}
 				
 				case INPUT_ARTBOARD: {
-					lb_strokes_artboard[lb_strokes_artboard_set_idx] = vec2_sub(point, lb_strokes_pan);
+					lb_strokes_artboard[lb_strokes_artboard_set_idx] = point;
 					switch(lb_strokes_artboard_set_idx) {
 						case 0:
 							lb_strokes_artboard_set_idx++;
-							lb_strokes_artboard[lb_strokes_artboard_set_idx] = vec2_sub(point, lb_strokes_pan);
+							lb_strokes_artboard[lb_strokes_artboard_set_idx] = point;
 							break;
 						case 1:
 							lb_strokes_artboard_set = true;
@@ -817,6 +845,10 @@ void lb_strokes_handleMouseDown(int button, vec2 point, float time) {
 	}
 }
 
+void lb_strokes_handleScroll(vec2 dist) {
+	lb_strokes_pan = vec2_add(lb_strokes_pan, dist);
+}
+
 void lb_strokes_handleMouseMove(vec2 point, float time) {
 	
 	if(input_mode == INPUT_ARTBOARD && lb_strokes_artboard_set_idx == 1) {
@@ -834,25 +866,25 @@ void lb_strokes_handleMouseMove(vec2 point, float time) {
 		case DRAG_ANCHOR: {
 			assert(lb_strokes_selected_vertex);
 			assert(drag_vec);
-			vec2 diff = vec2_sub(point, *drag_vec);
-			*drag_vec = point;
+			vec2 diff = vec2_sub(vec2_sub(point, lb_strokes_pan), *drag_vec);
+			*drag_vec = vec2_sub(point, lb_strokes_pan);
 			lb_strokes_selected_vertex->handles[0] = vec2_add(lb_strokes_selected_vertex->handles[0], diff);
 			lb_strokes_selected_vertex->handles[1] = vec2_add(lb_strokes_selected_vertex->handles[1], diff);
 			break;
 		}
 		case DRAG_HANDLE: {
 			assert(lb_strokes_selected_vertex);			
-			*drag_vec = point;
+			*drag_vec = vec2_sub(point, lb_strokes_pan);
 			if(mods_pressed[MOD_ALT]) break;
 			
 			// mirror the other point
-			lb_strokes_selected_vertex->handles[drag_handle_idx ? 0 : 1].x = 2*lb_strokes_selected_vertex->anchor.x - point.x;
-			lb_strokes_selected_vertex->handles[drag_handle_idx ? 0 : 1].y = 2*lb_strokes_selected_vertex->anchor.y - point.y;
+			lb_strokes_selected_vertex->handles[drag_handle_idx ? 0 : 1].x = 2*lb_strokes_selected_vertex->anchor.x - drag_vec->x;
+			lb_strokes_selected_vertex->handles[drag_handle_idx ? 0 : 1].y = 2*lb_strokes_selected_vertex->anchor.y - drag_vec->y;
 			break;
 		}
 		case DRAG_STROKE: {
 			assert(lb_strokes_selected);
-			vec2 diff = vec2_sub(point, drag_start);
+			vec2 diff = vec2_sub(vec2_sub(point, lb_strokes_pan), drag_start);
 			drag_start = vec2_add(drag_start, diff);
 			for(size_t i = 0; i < lb_strokes_selected->vertices_len; i++) {
 				lb_strokes_selected->vertices[i].anchor = vec2_add(lb_strokes_selected->vertices[i].anchor, diff);

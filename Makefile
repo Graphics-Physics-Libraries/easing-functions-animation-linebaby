@@ -14,9 +14,12 @@ endif
 
 CXXFLAGS += $(CFLAGS)
 
-
 .PHONY: all
-all: $(BUILD_DIR)/bin/linebaby
+ifeq ($(UNAME_S),Darwin)
+	all: $(BUILD_DIR)/bin/Linebaby.app
+else ifeq ($(UNAME_S),Linux)
+	all: $(BUILD_DIR)/bin/linebaby
+endif
 
 $(BUILD_DIR)/assets/%.c: src/assets/%
 	mkdir -p $(@D)
@@ -26,6 +29,9 @@ LINEBABY_ASSETS := $(shell find src/assets -type f)
 LINEBABY_ASSETS_PROCESSED := $(patsubst src/assets/%,$(BUILD_DIR)/assets/%.c,$(LINEBABY_ASSETS))
 .SECONDARY: $(LINEBABY_ASSETS_PROCESSED)
 
+LINEBABY_SOURCES := $(shell find src -type f -name '*.c' -o -name '*.cpp')
+LINEBABY_OBJECTS := $(patsubst src/%.cpp,$(BUILD_DIR)/obj/%.o,$(patsubst src/%.c,$(BUILD_DIR)/obj/%.o,$(LINEBABY_SOURCES)))
+
 $(BUILD_DIR)/obj/%.o: src/%.c $(LINEBABY_ASSETS_PROCESSED) | $(BUILD_DIR)/vendor
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -34,15 +40,13 @@ $(BUILD_DIR)/obj/%.o: src/%.cpp $(LINEBABY_ASSETS_PROCESSED) | $(BUILD_DIR)/vend
 	mkdir -p $(@D)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-LINEBABY_SOURCES := $(shell find src -type f -name '*.c' -o -name '*.cpp')
-LINEBABY_OBJECTS := $(patsubst src/%.cpp,$(BUILD_DIR)/obj/%.o,$(patsubst src/%.c,$(BUILD_DIR)/obj/%.o,$(LINEBABY_SOURCES)))
-
+EXEC_LIBS :=
 ifeq ($(UNAME_S),Darwin)
-	LDLIBS += -framework Cocoa -framework IOKit -framework CoreFoundation -framework CoreVideo -framework OpenGL
+	EXEC_LIBS += -framework Cocoa -framework IOKit -framework CoreFoundation -framework CoreVideo -framework OpenGL
 endif
 
 $(BUILD_DIR)/bin/linebaby: LDFLAGS += -L$(BUILD_DIR)/lib
-$(BUILD_DIR)/bin/linebaby: LDLIBS += -lstdc++ -limgui $(shell env PKG_CONFIG_PATH=./build/lib/pkgconfig pkg-config --static --libs-only-l glfw3 glew)
+$(BUILD_DIR)/bin/linebaby: LDLIBS += -lstdc++ -limgui $(shell env PKG_CONFIG_PATH=./build/lib/pkgconfig pkg-config --static --libs-only-l glfw3 glew) $(EXEC_LIBS)
 $(BUILD_DIR)/bin/linebaby: $(LINEBABY_OBJECTS) | $(BUILD_DIR)/vendor
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) $(LDLIBS) -o $@
