@@ -60,6 +60,10 @@ $(BUILD_DIR)/bin/Linebaby.app: $(BUILD_DIR)/bin/linebaby src/misc/macos/*
 	cp -f src/misc/macos/Linebaby.icns $@/Contents/Resources/Linebaby.icns
 	cp -f $(BUILD_DIR)/bin/linebaby $@/Contents/MacOS/linebaby
 
+$(BUILD_DIR)/linebaby.linux.zip: $(BUILD_DIR)/bin/linebaby src/misc/LICENSES.txt
+	mkdir -p $(@D)
+	zip -j $@ $^
+	
 # --- VENDOR ---
 
 .PHONY: vendor-package
