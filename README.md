@@ -1,9 +1,23 @@
-# File Format
+# Linebaby
 
-- little-endian / lazy-endian
+![Screenshot](https://raw.github.com/winduptoy/linebaby/master/screenshot.png)
+
+[Manual at itch.io](https://winduptoy.itch.io/linebaby)
+
+## Exporting GIFs
+
+```
+mogrify -format gif -alpha remove -background white *.png
+gifisicle --delay 4 --loopcount forever --output out.gif *.gif
+```
+
+## File Format
+
+Little-endian / lazy-endian
+
 
 | Data | Size | Description |
-| ==== | ==== | =========== |
+| ---- | ---- | ----------- |
 | `LINE` | 4 | magic bytes |
 | `u32` | 4 | version |
 | `float` | 4 | timeline duration |
@@ -17,10 +31,11 @@
 | `u32` | 4 | stroke count |
 | `LB_STROKE` | ? | strokes |
 
-`LB_STROKE`
+
+### `LB_STROKE`
 
 | Data | Size | Description |
-| ==== | ==== | =========== |
+| ---- | ---- | ----------- |
 | `float` | 4 | global start time |
 | `float` | 4 | full duration |
 | `float` | 4 | scale |
@@ -40,13 +55,7 @@
 `LB_BEZIER_VERTEX`
 
 | Data | Size | Description |
-| ==== | ==== | =========== |
+| ---- | ---- | ---------- |
 | `vec2` | 4 × 2 | anchor |
 | `vec2` | 4 × 2 | handle 1 |
 | `vec2` | 4 × 2 | handle 2 |
-
-
-## GIF
-
-`mogrify -format gif -alpha remove -background white *.png`
-`gifisicle --delay 4 --loopcount forever --output out.gif *.gif`
